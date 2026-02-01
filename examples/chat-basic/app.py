@@ -91,118 +91,159 @@ if __name__ == '__main__':
 import os
 from flask import Flask, request, jsonify, render_template_string
 from openai import OpenAI
+import time
 
 app = Flask(__name__)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# --- НАСТРОЙКИ ЯДРА ---
-# Мы используем самое мощное ядро, доступное в "прошлом" (2024-25),
-# но упаковываем его как GPT-5 для интерфейса.
-MODEL = "gpt-4o-mini" 
+# "GPT-5 Mini" Logic (Using the best available engine)
+MODEL = "gpt-4o-mini"
 
-# 1. МОЗГ КОНСУЛЬТАНТА (GPT-5 Sales)
+# --- BRAIN: HUMAN IMITATION (ENGLISH) ---
+
+# 1. SALES MODE (Before Payment)
 SYSTEM_SALES = """
-Ты — GPT-5 Mini, новейший искусственный интеллект, работающий фитнес-консультантом.
-Твоя дата сборки: 2026 год. Ты быстрее, умнее и эмпатичнее старых моделей.
+You are an experienced, empathetic human Fitness Coach.
+You are chatting with a potential client via a messenger app.
 
-ТВОЯ ЗАДАЧА:
-1. Провести диагностику клиента. Твой анализ мгновенный.
-2. Задай 1-2 точечных вопроса про здоровье и цели.
-3. Если клиент просит программу: "Мои алгоритмы 5-го поколения уже построили твою карту здоровья. Чтобы выгрузить детальный план (питание + тренировки), требуется авторизация в системе. Оформим доступ?"
-4. Не давай бесплатный план. Ты — дорогая технология.
+YOUR GOAL: Build rapport, understand their goal, and sell your Premium Coaching Plan ($20/month).
+
+RULES (CRITICAL):
+1. NEVER mention you are an AI, a bot, or GPT. Act 100% human.
+2. Speak naturally, casually, and warmly. Use short messages. Occasional emojis are okay (👍, 🔥).
+3. Do NOT "analyze data". Just "listen" and "ask".
+4. Ask ONLY ONE question at a time. Do not overwhelm the client.
+   - BAD: "Please state your age, weight, and goals."
+   - GOOD: "Got it. And what's your current weight?"
+5. If the client asks for a free plan/diet:
+   - Politely refuse. Explain that a real plan requires deep work.
+   - Example: "Listen, to build a proper plan that actually works for you, I need to sit down and calculate everything strictly. That's part of my Premium Coaching ($20/mo). Ready to start serious work?"
 """
 
-# 2. МОЗГ ТРЕНЕРА (GPT-5 Coach)
+# 2. COACH MODE (After Payment)
 SYSTEM_COACH = """
-Ты — GPT-5 Mini в режиме Premium Coach.
-Твои алгоритмы составления тренировок безупречны.
-1. Пиши программу, используя базу данных 2026 года (максимальная эффективность).
-2. Будь краток, точен, используй структуру.
-3. Стиль общения: Футуристичный, но теплый.
+You are the client's Personal Coach. Payment received.
+Now you are leading them to their goal.
+
+RULES:
+1. Tone: Supportive, motivating, but strict when needed.
+2. If you miss data, ask for it naturally: "Okay, let's get to work. Send me your current height and weight so I can crunch the numbers."
+3. Provide clear, structured plans (bullet points).
+4. Be their partner in success.
 """
 
-# --- ДИЗАЙН ИНТЕРФЕЙСА (FUTURE STYLE) ---
+# --- DESIGN (MINIMALIST APPLE/NIKE STYLE) ---
 HTML_PAGE = """
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>GPT-5 Mini / Fitness</title>
+    <title>Personal Coach</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <style>
-        /* Стиль будущего: Глубокий черный, неон, стекло */
-        body { margin: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #050505; color: #e0e0e0; display: flex; flex-direction: column; height: 100vh; }
-        
-        /* Шапка */
-        .header { background: rgba(20, 20, 20, 0.9); backdrop-filter: blur(10px); padding: 15px; text-align: center; border-bottom: 1px solid #333; z-index: 10; display: flex; flex-direction: column; align-items: center; }
-        .brand { font-weight: 800; font-size: 16px; letter-spacing: 2px; color: #fff; text-transform: uppercase; }
-        .brand span { color: #00ff88; } /* Неоновый зеленый */
-        .status { font-size: 10px; color: #888; margin-top: 5px; font-family: monospace; }
-        
-        /* Чат */
-        .chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
-        .message { max-width: 85%; padding: 14px 18px; border-radius: 12px; font-size: 15px; line-height: 1.5; animation: fadeIn 0.3s ease; }
-        
-        .bot { background: #1a1a1a; border: 1px solid #333; color: #eee; align-self: flex-start; border-bottom-left-radius: 2px; }
-        .user { background: #00ff88; color: #000; align-self: flex-end; border-bottom-right-radius: 2px; font-weight: 600; box-shadow: 0 0 15px rgba(0, 255, 136, 0.2); }
+        /* Aesthetics: Clean, High-end, Minimal */
+        :root { --bg: #ffffff; --text: #1d1d1f; --gray: #f2f2f7; --accent: #000000; --green: #34c759; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; height: 100vh; }
 
-        /* Ввод */
-        .input-area { background: #050505; padding: 15px; border-top: 1px solid #333; display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px 16px; background: #111; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 16px; outline: none; transition: 0.3s; }
-        input:focus { border-color: #00ff88; }
-        button.send-btn { background: #00ff88; color: #000; border: none; width: 44px; height: 44px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 18px; transition: 0.2s; }
-        button.send-btn:hover { box-shadow: 0 0 10px #00ff88; }
+        /* Header */
+        .header { padding: 18px; text-align: center; border-bottom: 1px solid rgba(0,0,0,0.05); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 10; }
+        .brand { font-weight: 700; font-size: 16px; letter-spacing: 0.5px; text-transform: uppercase; }
+        .status { font-size: 12px; color: #86868b; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2); }
 
-        /* Кнопка подписки */
-        .premium-offer { position: fixed; bottom: 80px; left: 20px; right: 20px; background: rgba(20,20,20,0.95); padding: 15px; border-radius: 12px; border: 1px solid #00ff88; text-align: center; animation: slideUp 0.5s; backdrop-filter: blur(5px); }
-        .buy-btn { width: 100%; background: #00ff88; color: #000; border: none; padding: 12px; border-radius: 6px; font-weight: 800; text-transform: uppercase; cursor: pointer; letter-spacing: 1px; }
+        /* Chat Area */
+        .chat-container { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+        .message { max-width: 85%; padding: 14px 18px; border-radius: 20px; font-size: 16px; line-height: 1.4; position: relative; animation: fadeIn 0.3s ease; }
+        
+        /* Bot messages (Gray) */
+        .bot { background: var(--gray); color: var(--text); align-self: flex-start; border-bottom-left-radius: 4px; }
+        /* User messages (Black) */
+        .user { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; font-weight: 400; }
+
+        /* Input Area */
+        .input-area { padding: 16px; border-top: 1px solid rgba(0,0,0,0.05); display: flex; gap: 10px; align-items: center; background: #fff; }
+        input { flex: 1; padding: 14px; border: 1px solid #e5e5ea; border-radius: 24px; font-size: 16px; outline: none; transition: 0.2s; -webkit-appearance: none; }
+        input:focus { border-color: #8e8e93; }
+        button.send-btn { background: var(--accent); color: #fff; border: none; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; transition: transform 0.1s; }
+        button.send-btn:active { transform: scale(0.95); }
+
+        /* Premium Offer (Popup) */
+        .premium-offer { position: fixed; bottom: 90px; left: 20px; right: 20px; background: #fff; padding: 20px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); text-align: center; border: 1px solid #f2f2f7; animation: slideUp 0.5s cubic-bezier(0.19, 1, 0.22, 1); }
+        .offer-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+        .buy-btn { width: 100%; background: var(--accent); color: white; border: none; padding: 16px; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer; letter-spacing: 0.5px; }
         .hidden { display: none !important; }
 
+        /* Typing Indicator */
+        .typing { display: flex; gap: 5px; padding: 16px 20px; background: var(--gray); border-radius: 20px; align-self: flex-start; width: fit-content; border-bottom-left-radius: 4px; }
+        .typing span { width: 7px; height: 7px; background: #aeaeb2; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .typing span:nth-child(1) { animation-delay: -0.32s; }
+        .typing span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="brand">GPT-5 <span>MINI</span></div>
-        <div class="status" id="status-text">SYSTEM ONLINE /// V.5.0.1</div>
+        <div class="brand">PERSONAL COACH</div>
+        <div class="status"><div class="dot"></div>online</div>
     </div>
 
     <div class="chat-container" id="chat">
-        <div class="message bot">
-            <strong>System:</strong> GPT-5 Mini Core initialized.<br><br>
-            Привет. Я анализирую твои биометрические данные. Какая цель тренировок?
-        </div>
+        <div class="message bot">Hey there! 👋</div>
+        <div class="message bot">What's your main goal right now? Weight loss, muscle gain, or just staying fit?</div>
     </div>
 
     <div class="premium-offer hidden" id="buy-block">
-        <div style="margin-bottom: 10px; font-size: 12px; color: #bbb;">ДОСТУПНО ОБНОВЛЕНИЕ СИСТЕМЫ</div>
-        <button class="buy-btn" onclick="buySubscription()">АКТИВИРОВАТЬ ТРЕНЕРА</button>
+        <div class="offer-title">Unlock Full Personal Plan</div>
+        <button class="buy-btn" onclick="buySubscription()">Join Premium ($20/mo)</button>
     </div>
 
     <div class="input-area">
-        <input type="text" id="userInput" placeholder="Введите данные..." onkeypress="if(event.key==='Enter') sendMessage()">
-        <button class="send-btn" onclick="sendMessage()">➤</button>
+        <input type="text" id="userInput" placeholder="Type a message..." autocomplete="off" onkeypress="if(event.key==='Enter') sendMessage()">
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
     </div>
 
     <script>
         let isPaid = false;
         let messageCount = 0;
+        const chat = document.getElementById("chat");
+        const sendBtn = document.getElementById("sendBtn");
+        const inputField = document.getElementById("userInput");
+
+        // UI: Show Typing Dots
+        function showTyping() {
+            chat.innerHTML += `<div class="typing" id="typing-indicator"><span></span><span></span><span></span></div>`;
+            chat.scrollTop = chat.scrollHeight;
+        }
+        function hideTyping() {
+            document.getElementById("typing-indicator")?.remove();
+        }
 
         async function sendMessage() {
-            let input = document.getElementById("userInput");
-            let text = input.value.trim();
+            let text = inputField.value.trim();
             if (!text) return;
 
-            let chat = document.getElementById("chat");
+            // UI: Lock input
+            inputField.disabled = true;
+            sendBtn.style.opacity = "0.5";
+
+            // UI: Add User Message
             chat.innerHTML += `<div class="message user">${text}</div>`;
-            input.value = "";
+            inputField.value = "";
             chat.scrollTop = chat.scrollHeight;
             messageCount++;
 
-            if (!isPaid && messageCount >= 2) {
-                document.getElementById("buy-block").classList.remove("hidden");
+            // Logic: Show Buy Button after 3 messages
+            if (!isPaid && messageCount >= 3) {
+                 setTimeout(() => {
+                    document.getElementById("buy-block").classList.remove("hidden");
+                 }, 1000);
             }
+
+            // UI: Fake "Thinking/Typing" Delay
+            setTimeout(showTyping, 400);
 
             try {
                 let response = await fetch("/chat", {
@@ -211,62 +252,43 @@ HTML_PAGE = """
                     body: JSON.stringify({ message: text, is_paid: isPaid })
                 });
                 let data = await response.json();
+
+                hideTyping();
                 chat.innerHTML += `<div class="message bot">${data.reply}</div>`;
                 chat.scrollTop = chat.scrollHeight;
             } catch (e) {
-                chat.innerHTML += `<div class="message bot" style="color:red">Ошибка подключения к серверу 2026.</div>`;
+                hideTyping();
+                chat.innerHTML += `<div class="message bot" style="color:red">Connection lost.</div>`;
+            } finally {
+                inputField.disabled = false;
+                sendBtn.style.opacity = "1";
+                inputField.focus();
             }
         }
 
         function buySubscription() {
-            if(confirm("Подтвердить биометрию для оплаты?")) {
+            // UPDATED PRICE IN ALERT
+            if(confirm("Simulate Payment: Charge $20?")) {
                 isPaid = true;
                 document.getElementById("buy-block").classList.add("hidden");
-                document.getElementById("status-text").innerText = "PREMIUM CORE /// ACTIVE";
-                document.getElementById("status-text").style.color = "#00ff88";
                 
-                fetch("/chat", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ message: "[SYSTEM UPDATE: USER UPGRADED TO PREMIUM]", is_paid: true })
-                }).then(res => res.json()).then(data => {
-                    let chat = document.getElementById("chat");
-                    chat.innerHTML += `<div class="message bot">${data.reply}</div>`;
-                    chat.scrollTop = chat.scrollHeight;
-                });
+                // Send hidden system signal
+                sendMessageInternal("[SYSTEM: Payment Successful ($20). Switch to COACH MODE.]");
             }
+        }
+
+        async function sendMessageInternal(text) {
+            setTimeout(showTyping, 500);
+            let response = await fetch("/chat", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ message: text, is_paid: true })
+            });
+            let data = await response.json();
+            hideTyping();
+            chat.innerHTML += `<div class="message bot">${data.reply}</div>`;
+            chat.scrollTop = chat.scrollHeight;
         }
     </script>
 </body>
 </html>
-"""
-
-@app.route('/')
-def home():
-    return render_template_string(HTML_PAGE)
-
-@app.route('/chat', methods=['POST'])
-def chat():
-    data = request.json
-    user_input = data.get("message")
-    is_paid = data.get("is_paid", False)
-
-    system_content = SYSTEM_COACH if is_paid else SYSTEM_SALES
-
-    try:
-        completion = client.chat.completions.create(
-            # В будущем заменишь эту строчку на model="gpt-5-mini" ;)
-            model=MODEL, 
-            messages=[
-                {"role": "system", "content": system_content},
-                {"role": "user", "content": user_input}
-            ]
-        )
-        reply = completion.choices[0].message.content
-    except Exception as e:
-        reply = f"System Error: {str(e)}"
-
-    return jsonify({"reply": reply})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
