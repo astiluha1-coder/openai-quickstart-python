@@ -1,10 +1,8 @@
 import os
 from flask import Flask, request, jsonify, render_template_string
 from openai import OpenAI
-from datetime import datetime
 
 app = Flask(__name__)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # --- НАСТРОЙКИ ---
 MODEL = "gpt-4o-mini"
@@ -23,6 +21,7 @@ RULES:
 4. Act like a high-end human coach.
 """
 
+# --- ДИЗАЙН (PREMIUM STYLE) ---
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -31,13 +30,12 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>Coach</title>
     <style>
-        /* --- PREMIUM DESIGN SYSTEM --- */
         :root { 
             --bg: #ffffff; 
             --chat-bg: #ffffff;
-            --user-msg-bg: #007aff; /* Apple Blue */
+            --user-msg-bg: #007aff; 
             --user-msg-text: #ffffff;
-            --bot-msg-bg: #f2f2f7; /* Apple Gray */
+            --bot-msg-bg: #f2f2f7; 
             --bot-msg-text: #000000;
             --input-bg: #f2f2f7;
             --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -45,7 +43,6 @@ HTML_PAGE = """
 
         body { margin: 0; font-family: var(--font); background: var(--bg); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* HEADER: Чистый минимализм */
         .header { 
             padding: 16px 20px; 
             background: rgba(255,255,255,0.95); 
@@ -65,7 +62,6 @@ HTML_PAGE = """
         .dot { width: 6px; height: 6px; background: #8e8e93; border-radius: 50%; }
         .dot.active { background: #34c759; box-shadow: 0 0 5px rgba(52, 199, 89, 0.4); }
 
-        /* CHAT AREA */
         .chat-box { 
             flex: 1; 
             overflow-y: auto; 
@@ -76,65 +72,36 @@ HTML_PAGE = """
             scroll-behavior: smooth;
         }
         
-        /* СООБЩЕНИЯ (Bubble Style) */
         .msg { 
             max-width: 85%; 
             padding: 12px 18px; 
             border-radius: 20px; 
             font-size: 16px; 
             line-height: 1.5; 
-            position: relative; 
             animation: popIn 0.3s cubic-bezier(0.25, 1, 0.5, 1);
         }
-        .bot { 
-            background: var(--bot-msg-bg); 
-            color: var(--bot-msg-text); 
-            align-self: flex-start; 
-            border-bottom-left-radius: 4px; /* Хвостик слева */
-        }
-        .user { 
-            background: var(--user-msg-bg); 
-            color: var(--user-msg-text); 
-            align-self: flex-end; 
-            border-bottom-right-radius: 4px; /* Хвостик справа */
-            box-shadow: 0 2px 5px rgba(0,122,255,0.2);
-        }
+        .bot { background: var(--bot-msg-bg); color: var(--bot-msg-text); align-self: flex-start; border-bottom-left-radius: 4px; }
+        .user { background: var(--user-msg-bg); color: var(--user-msg-text); align-self: flex-end; border-bottom-right-radius: 4px; box-shadow: 0 2px 5px rgba(0,122,255,0.2); }
 
-        /* INPUT AREA */
         .input-area { 
             padding: 15px 20px; 
             background: #fff; 
             border-top: 1px solid rgba(0,0,0,0.05); 
-            display: flex; 
-            gap: 12px; 
-            align-items: center;
+            display: flex; gap: 12px; align-items: center;
         }
         input { 
-            flex: 1; 
-            padding: 14px 18px; 
-            background: var(--input-bg); 
-            border: none; 
-            border-radius: 25px; 
-            font-size: 16px; 
-            outline: none; 
-            font-family: var(--font);
-            transition: background 0.2s;
+            flex: 1; padding: 14px 18px; background: var(--input-bg); 
+            border: none; border-radius: 25px; font-size: 16px; outline: none; font-family: var(--font);
         }
         input:focus { background: #e5e5ea; }
         
         button.send-btn { 
-            width: 40px; height: 40px; 
-            background: var(--user-msg-bg); 
-            border-radius: 50%; 
-            border: none; 
-            display: flex; align-items: center; justify-content: center; 
-            cursor: pointer; 
-            transition: transform 0.1s;
+            width: 40px; height: 40px; background: var(--user-msg-bg); 
+            border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; 
+            cursor: pointer; transition: transform 0.1s; color: white; font-weight: bold;
         }
         button.send-btn:active { transform: scale(0.9); }
-        button.send-btn svg { fill: white; width: 18px; height: 18px; margin-left: 2px; }
 
-        /* BLUR & PAYWALL */
         .lock-screen { 
             position: fixed; inset: 0; 
             background: rgba(255,255,255,0.85); 
@@ -145,15 +112,12 @@ HTML_PAGE = """
             text-align: center; padding: 30px; 
             animation: fadeIn 0.5s;
         }
-        .lock-icon { font-size: 40px; margin-bottom: 15px; }
         .lock-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; color: #1c1c1e; }
         .lock-msg { font-size: 15px; color: #8e8e93; margin-bottom: 25px; max-width: 280px; line-height: 1.4; }
         .primary-btn { 
-            background: #000; color: #fff; 
-            padding: 16px 32px; border-radius: 30px; 
+            background: #000; color: #fff; padding: 16px 32px; border-radius: 30px; 
             text-decoration: none; font-weight: 600; font-size: 16px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
-            transition: transform 0.2s; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15); transition: transform 0.2s; 
         }
         .primary-btn:hover { transform: scale(1.03); }
 
@@ -175,7 +139,7 @@ HTML_PAGE = """
     </div>
 
     <div id="paywall" class="lock-screen hidden">
-        <div class="lock-icon">🔒</div>
+        <div style="font-size:40px; margin-bottom:15px">🔒</div>
         <div class="lock-title">Unlock Full Access</div>
         <div class="lock-msg" id="lock-msg">Your free preview has ended. <br>Start your personal plan today.</div>
         <a href="{{ shopify_url }}" target="_blank" class="primary-btn">Start 1st Month for $1</a>
@@ -184,19 +148,15 @@ HTML_PAGE = """
 
     <div class="input-area">
         <input type="text" id="userInput" placeholder="Message..." onkeypress="if(event.key==='Enter') sendMessage()">
-        <button class="send-btn" onclick="sendMessage()">
-            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
-        </button>
+        <button class="send-btn" onclick="sendMessage()">↑</button>
     </div>
 
     <script>
-        // --- LOGIC ---
         const FREE_LIMIT = 5;
         const PAID_LIMIT = 20;
         const ONE_MONTH = 30 * 24 * 60 * 60 * 1000;
 
         let isPremium = false;
-        
         let today = new Date().toDateString();
         let storedDate = localStorage.getItem("msgDate");
         let msgCount = 0;
@@ -242,8 +202,6 @@ HTML_PAGE = """
             const dot = document.getElementById("dot");
             const text = document.getElementById("status-text");
             const pill = document.getElementById("status-pill");
-
-            // Счетчик сообщений в заголовке
             const currentLimit = premium ? PAID_LIMIT : FREE_LIMIT;
             const left = Math.max(0, currentLimit - msgCount);
             
@@ -275,7 +233,6 @@ HTML_PAGE = """
             }
 
             let chat = document.getElementById("chat");
-            // User Message
             chat.innerHTML += `<div class="msg user">${text}</div>`;
             input.value = "";
             chat.scrollTop = chat.scrollHeight;
@@ -291,8 +248,6 @@ HTML_PAGE = """
                     body: JSON.stringify({ message: text, is_paid: isPremium })
                 });
                 let data = await response.json();
-                
-                // Bot Message (с небольшой задержкой для реалистичности)
                 chat.innerHTML += `<div class="msg bot">${data.reply}</div>`;
                 chat.scrollTop = chat.scrollHeight;
             } catch (e) {
@@ -302,3 +257,43 @@ HTML_PAGE = """
     </script>
 </body>
 </html>
+"""
+
+@app.route('/')
+def home():
+    return render_template_string(HTML_PAGE, shopify_url=SHOPIFY_PRODUCT_URL, access_key=CURRENT_ACCESS_KEY)
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    # ЗАЩИТА ОТ КРАША: Проверяем ключ ВНУТРИ запроса, а не при старте
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return jsonify({"reply": "⚠️ SYSTEM ERROR: OpenAI API Key is missing in Railway. Please add it to Variables."})
+    
+    # Создаем клиента только когда он нужен
+    client = OpenAI(api_key=api_key)
+
+    data = request.json
+    user_input = data.get("message", "")
+    is_paid = data.get("is_paid", False)
+
+    system = SYSTEM_COACH if is_paid else SYSTEM_SALES
+
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_input}
+            ]
+        )
+        reply = completion.choices[0].message.content
+    except Exception as e:
+        reply = f"Error: {str(e)}"
+
+    return jsonify({"reply": reply})
+
+if __name__ == '__main__':
+    # ВАЖНО ДЛЯ RAILWAY: Слушаем правильный порт
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
