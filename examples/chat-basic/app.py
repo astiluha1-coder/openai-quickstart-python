@@ -177,6 +177,7 @@ HTML_PAGE = """
         }
 
         function buySubscription() {
+            // UPDATED PRICE IN ALERT
             if(confirm("Simulate Payment: Charge $20?")) {
                 isPaid = true;
                 document.getElementById("buy-block").classList.add("hidden");
@@ -201,3 +202,35 @@ HTML_PAGE = """
     </script>
 </body>
 </html>
+"""
+
+@app.route('/')
+def home():
+    return render_template_string(HTML_PAGE)
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    data = request.json
+    user_input = data.get("message")
+    is_paid = data.get("is_paid", False)
+
+    # Switch Brains
+    system_content = SYSTEM_COACH if is_paid else SYSTEM_SALES
+
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL, # gpt-4o-mini disguised as a human
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_input}
+            ],
+            temperature=0.7 # Natural creativity
+        )
+        reply = completion.choices[0].message.content
+    except Exception as e:
+        reply = "Sorry, I lost connection for a second."
+
+    return jsonify({"reply": reply})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
