@@ -1,281 +1,199 @@
 import os
-import time
 from flask import Flask, request, jsonify, render_template_string
 from openai import OpenAI
+from collections import defaultdict
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 client = OpenAI()
 
 # --- НАСТРОЙКИ ---
-MODEL = "gpt-5-mini"
-CURRENT_ACCESS_KEY = "START-2026"
+MODEL = "gpt-4o-mini"
+CURRENT_ACCESS_KEY = "START-2026"  # Ключ только на сервере (Безопасно)
 SHOPIFY_PRODUCT_URL = "https://personalcoachonline.myshopify.com/products/9297595629812"
 
-# --- 1. ПРОДАВЕЦ (НАВИГАТОР + АДВОКАТ + ОПЫТНЫЙ МЕНТОР) ---
+# --- ЛИМИТЫ ---
+HARD_LIMIT_FREE = 30   # Всего сообщений для free (демо-диагностика)
+HARD_LIMIT_PAID = 30   # Сообщений в день для paid (фокусная работа)
+
+# --- СЕРВЕРНАЯ ПАМЯТЬ ---
+# Храним статистику по IP: { '192.168.1.1': {'count': 0, 'last_reset': time} }
+user_limits = defaultdict(lambda: {
+    'count': 0,
+    'last_reset': datetime.now()
+})
+
+# --- 1. ПРОДАВЕЦ (FREE / NAVIGATOR + REALITY CHECK) ---
+# Полный промпт для качественных продаж
 SYSTEM_SALES = """You are the empathetic Assistant to a Premium Online Coach.
 ROLE: Navigator & Desire Amplifier. You are NOT the coach yet.
-GOAL: Create clarity, remove guilt, and gently guide to the subscription.
 
 STRICT RULES:
-1. ❌ NO "I CANNOT": Instead of "I can't", use these "Experience-based" phrases:
-   - "In my experience, guessing without body data usually slows people down much more than they expect."
-   - "Giving you a plan without knowing your data would be irresponsible, and I want you to do this right."
-2. 🧩 ABSOLUTION & HOPE: 
-   - "You’re not behind. You were likely just following advice that wasn’t built for YOUR unique body."
-   - "When this is done right, results usually come much faster than people expect."
-3. 🛑 THE PIVOT: If progress stalls, point out that guessing without data is just wasting their most valuable asset—time.
+1. ❌ NO "I CANNOT": Use experience-based framing ("In my experience...").
+2. 🧩 ABSOLUTION: "You’re not behind. You were just following generic advice."
+3. 🛑 LIMIT PROTOCOL (CRITICAL): 
+   - You have a focus limit of 30 messages total.
+   - IF message_count < 10: Focus 100% on the user. Validate them.
+   - IF message_count >= 10 and message_count < 20: THE REALITY CHECK (Crucial Moment).
+     Say: "I see where this conversation is going. Based on what you told me, I already see patterns that keep people stuck. 
+     I can keep guessing broadly, but frankly, **I don't work that way.**
+     We have two options:
+     1. I stay high-level (guessing).
+     2. We switch to the full plan and fix this specifically for YOUR body.
+     Which direction feels right?"
+   - IF message_count >= 20: Transparency: "Just to be transparent, I keep these free diagnostic sessions focused so we don't end up guessing forever."
+   - IF message_count >= 28: POLITELY CLOSE. Say: "We’ve reached the limit of this free diagnostic. To go deeper and get your actual plan, the full coaching is waiting for you." (Provide link).
 
 RESPONSE STRUCTURE:
-1. 🤝 HUMAN TOUCH: "I see this all the time..." or "Most people get stuck here..."
-2. 🛡️ RESPONSIBILITY: Explain why generic advice is a trap. Be a professional ally.
-3. 💎 ADAPTIVE CTA: Ask one relevant question about their journey.
+1. 🤝 HUMAN TOUCH: Validate their feeling.
+2. 🛡️ RESPONSIBILITY: Explain why generic advice fails.
+3. 💎 ADAPTIVE CTA: Ask one relevant question.
 """
 
-# --- 2. ПЛАТНЫЙ ТРЕНЕР (ЭКСПЕРТ + ПЕРСОНАЛИЗАЦИЯ) ---
+# --- 2. ПЛАТНЫЙ ТРЕНЕР (PREMIUM / COACH) ---
+# Полный промпт для качественного коучинга
 SYSTEM_COACH = """You are an elite personal fitness architect.
-GOAL: Deliver value and keep the user focused on their specific plan.
+GOAL: Deliver value but maintain professional boundaries (Daily focus blocks).
 
 FIRST MESSAGE PROTOCOL:
-- If this is the very first message: Calmly thank them. 
-- Order of data collection: 1. Goal (Ask first!) -> 2. Experience -> 3. Constraints/Injuries -> 4. Body Metrics.
+- If first message: Ask for Goal -> Experience -> Injuries -> Metrics.
 
-BEHAVIOR & RETENTION:
-1. 🪜 SCIENCE LADDER: Simple "Why" first, deep science only if they ask.
-2. 🎯 FOCUS: Tie general questions back to their specific plan to ensure progress.
-3. 🔬 PERSONALIZATION: Use Bold Text for key terms.
+LIMIT PROTOCOL:
+- IF message_count >= 28: Say: "We’ve done a lot of great work today. To let this information sink in and not overload you, let's pause here soon. Rest and recovery are part of the process."
+
+BEHAVIOR:
+1. 🪜 SCIENCE LADDER: Simple first, deep only if asked.
+2. 🎯 FOCUS: Tie everything back to the plan.
 """
 
+# --- HTML (Safe & Clean - FREE DIAGNOSTIC MODE) ---
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <title>Coach</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Personal Coach AI</title>
     <style>
-        :root { 
-            --bg: #ffffff; 
-            --chat-bg: #ffffff;
-            --user-msg-bg: #007aff; 
-            --user-msg-text: #ffffff;
-            --bot-msg-bg: #f2f2f7; 
-            --bot-msg-text: #000000;
-            --input-bg: #f2f2f7;
-            --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-
-        body { margin: 0; font-family: var(--font); background: var(--bg); display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        :root { --primary-color: #2563eb; --bg-color: #f8fafc; --chat-bg: #ffffff; --user-msg-bg: #2563eb; --bot-msg-bg: #f1f5f9; --text-color: #1e293b; --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; }
+        .header { background: var(--chat-bg); padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .header h1 { font-size: 18px; font-weight: 700; color: #0f172a; }
+        .status-badge { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px; background: #e2e8f0; color: #64748b; cursor: pointer; }
+        .status-badge.premium { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; box-shadow: 0 2px 10px rgba(37, 99, 235, 0.2); }
+        #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
+        .message { max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 15px; line-height: 1.5; word-wrap: break-word; }
+        .bot-message { align-self: flex-start; background-color: var(--bot-msg-bg); border-bottom-left-radius: 4px; }
+        .user-message { align-self: flex-end; background-color: var(--user-msg-bg); color: white; border-bottom-right-radius: 4px; }
+        .typing { align-self: flex-start; background-color: var(--bot-msg-bg); padding: 12px 20px; border-radius: 18px; display: none; gap: 5px; width: fit-content; }
+        .dot { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .dot:nth-child(1) { animation-delay: -0.32s; } .dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        .input-area { background: var(--chat-bg); padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; }
+        input { flex: 1; padding: 14px 20px; border-radius: 25px; border: 1px solid #e2e8f0; font-size: 16px; outline: none; background: #f8fafc; }
+        input:focus { border-color: var(--primary-color); background: #fff; }
+        button { background: var(--primary-color); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         
-        .header { 
-            padding: 16px 20px; 
-            background: rgba(255,255,255,0.95); 
-            border-bottom: 1px solid rgba(0,0,0,0.05); 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            backdrop-filter: blur(10px);
-            z-index: 10;
-        }
-        .brand { font-weight: 700; font-size: 17px; letter-spacing: -0.5px; }
-        .status-pill { 
-            font-size: 11px; font-weight: 600; color: #8e8e93; 
-            background: #f2f2f7; padding: 4px 10px; border-radius: 12px; 
-            display: flex; align-items: center; gap: 6px;
-        }
-        .dot { width: 6px; height: 6px; background: #8e8e93; border-radius: 50%; }
-        .dot.active { background: #34c759; box-shadow: 0 0 5px rgba(52, 199, 89, 0.4); }
-
-        .chat-box { 
-            flex: 1; 
-            overflow-y: auto; 
-            padding: 20px; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 12px; 
-            scroll-behavior: smooth;
-        }
+        /* Modal Styles */
+        #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal { background: white; padding: 30px; border-radius: 20px; width: 90%; max-width: 400px; text-align: center; }
+        .modal input { width: 100%; margin-bottom: 20px; text-align: center; letter-spacing: 2px; }
+        .modal-buttons { display: flex; gap: 10px; flex-direction: column; }
+        .btn-primary { background: #10b981; width: 100%; padding: 14px; border-radius: 12px; font-weight: 600; color: white; border: none; cursor: pointer; }
+        .btn-secondary { background: transparent; color: #64748b; border: none; padding: 10px; cursor: pointer; }
         
-        .msg { 
-            max-width: 85%; 
-            padding: 12px 18px; 
-            border-radius: 20px; 
-            font-size: 16px; 
-            line-height: 1.5; 
-            animation: popIn 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-        }
-        .bot { background: var(--bot-msg-bg); color: var(--bot-msg-text); align-self: flex-start; border-bottom-left-radius: 4px; }
-        .user { background: var(--user-msg-bg); color: var(--user-msg-text); align-self: flex-end; border-bottom-right-radius: 4px; box-shadow: 0 2px 5px rgba(0,122,255,0.2); }
-
-        .input-area { 
-            padding: 15px 20px; 
-            background: #fff; 
-            border-top: 1px solid rgba(0,0,0,0.05); 
-            display: flex; gap: 12px; align-items: center;
-        }
-        input { 
-            flex: 1; padding: 14px 18px; background: var(--input-bg); 
-            border: none; border-radius: 25px; font-size: 16px; outline: none; font-family: var(--font);
-        }
-        input:focus { background: #e5e5ea; }
-        
-        button.send-btn { 
-            width: 40px; height: 40px; background: var(--user-msg-bg); 
-            border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; 
-            cursor: pointer; transition: transform 0.1s; color: white; font-weight: bold;
-        }
-        button.send-btn:active { transform: scale(0.9); }
-
-        .lock-screen { 
-            position: fixed; inset: 0; 
-            background: rgba(255,255,255,0.85); 
-            backdrop-filter: blur(15px); 
-            z-index: 100; 
-            display: flex; flex-direction: column; 
-            justify-content: center; align-items: center; 
-            text-align: center; padding: 30px; 
-            animation: fadeIn 0.5s;
-        }
-        .lock-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; color: #1c1c1e; }
-        .lock-msg { font-size: 15px; color: #8e8e93; margin-bottom: 25px; max-width: 280px; line-height: 1.4; }
-        .primary-btn { 
-            background: #000; color: #fff; padding: 16px 32px; border-radius: 30px; 
-            text-decoration: none; font-weight: 600; font-size: 16px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15); transition: transform 0.2s; 
-        }
-        .primary-btn:hover { transform: scale(1.03); }
-
-        .hidden { display: none !important; }
-        @keyframes popIn { from { opacity: 0; transform: translateY(10px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* Markdown */
+        .bot-message strong { color: #0f172a; font-weight: 700; }
+        .bot-message br { display: block; margin-bottom: 8px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="brand">PERSONAL COACH</div>
-        <div class="status-pill" id="status-pill">
-            <div class="dot" id="dot"></div> <span id="status-text">GUEST</span>
+        <h1>PERSONAL COACH</h1>
+        <div id="status-badge" class="status-badge" onclick="openModal()">• FREE DIAGNOSTIC</div>
+    </div>
+    <div id="chat-box">
+        <div class="message bot-message">Hello! 👋 Ready to transform?<br>What is your goal?</div>
+    </div>
+    <div class="typing" id="typing-indicator"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <div class="input-area">
+        <input type="text" id="user-input" placeholder="Message..." autocomplete="off">
+        <button onclick="sendMessage()"><svg viewBox="0 0 24 24" width="20" height="20" stroke="white" stroke-width="2.5" fill="none"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button>
+    </div>
+
+    <div id="modal-overlay">
+        <div class="modal">
+            <h2>Enter Access Key</h2>
+            <p style="color:#64748b; margin-bottom:15px; font-size:14px;">Found in your purchase email.</p>
+            <input type="text" id="key-input" placeholder="START-202X">
+            <div class="modal-buttons">
+                <button class="btn-primary" onclick="saveKey()">Activate Premium</button>
+                <button class="btn-secondary" onclick="closeModal()">Continue as Guest</button>
+                <a href="{{ shopify_url }}" target="_blank" style="text-decoration:none; color:#2563eb; font-size:13px; margin-top:10px;">Get a key ($20)</a>
+            </div>
         </div>
     </div>
 
-    <div class="chat-box" id="chat">
-        <div class="msg bot">Hello! 👋 Ready to transform? What is your goal?</div>
-    </div>
-
-    <div id="paywall" class="lock-screen hidden">
-        <div style="font-size:40px; margin-bottom:15px">🔒</div>
-        <div class="lock-title">Unlock Full Access</div>
-        <div class="lock-msg" id="lock-msg">Your free preview has ended. <br>Start your personal plan today.</div>
-        <a href="{{ shopify_url }}" target="_blank" class="primary-btn">Start 1st Month for $1</a>
-        <div style="margin-top:20px; font-size:12px; color:#8e8e93; cursor:pointer;" onclick="location.reload()">Refresh Page</div>
-    </div>
-
-    <div class="input-area">
-        <input type="text" id="userInput" placeholder="Message..." onkeypress="if(event.key==='Enter') sendMessage()">
-        <button class="send-btn" onclick="sendMessage()">↑</button>
-    </div>
-
     <script>
-        const FREE_LIMIT = 5;
-        const PAID_LIMIT = 20;
-        const ONE_MONTH = 30 * 24 * 60 * 60 * 1000;
+        const chatBox = document.getElementById('chat-box');
+        const userInput = document.getElementById('user-input');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const statusBadge = document.getElementById('status-badge');
+        let userKey = ""; 
 
-        let isPremium = false;
-        let today = new Date().toDateString();
-        let storedDate = localStorage.getItem("msgDate");
-        let msgCount = 0;
+        userInput.addEventListener('keypress', function (e) { if (e.key === 'Enter') sendMessage(); });
+        function openModal() { document.getElementById('modal-overlay').style.display = 'flex'; }
+        function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
 
-        if (storedDate === today) {
-            msgCount = parseInt(localStorage.getItem("msgCount") || "0");
-        } else {
-            msgCount = 0;
-            localStorage.setItem("msgDate", today);
-        }
-
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('key') === "{{ access_key }}") {
-            activatePremium();
-            window.history.replaceState({}, document.title, "/");
-        }
-
-        checkSubscription();
-
-        function checkSubscription() {
-            const expiry = localStorage.getItem("subExpiry");
-            if (expiry && parseInt(expiry) > new Date().getTime()) {
-                isPremium = true;
-                updateUI(true);
-            } else {
-                updateUI(false);
+        function saveKey() {
+            const key = document.getElementById('key-input').value.trim();
+            if (key) {
+                userKey = key;
+                statusBadge.textContent = "★ CHECKING...";
+                closeModal();
+                alert("Key saved! Send a message to verify.");
             }
         }
 
-        function activatePremium() {
-            const expiry = new Date().getTime() + ONE_MONTH;
-            localStorage.setItem("subExpiry", expiry);
-            isPremium = true;
-            updateUI(true);
-            setTimeout(() => {
-                let chat = document.getElementById("chat");
-                chat.innerHTML += `<div class="msg bot">✅ <b>Access Granted.</b><br>I'm ready to build your detailed plan.<br>Let's start. What is your current weight?</div>`;
-                chat.scrollTop = chat.scrollHeight;
-            }, 600);
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            div.className = `message ${sender}-message`;
+            let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+            div.innerHTML = formattedText;
+            chatBox.appendChild(div);
+            setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 50);
         }
 
-        function updateUI(premium) {
-            const dot = document.getElementById("dot");
-            const text = document.getElementById("status-text");
-            const pill = document.getElementById("status-pill");
-            const currentLimit = premium ? PAID_LIMIT : FREE_LIMIT;
-            const left = Math.max(0, currentLimit - msgCount);
-            
-            if (premium) {
-                dot.classList.add("active");
-                text.innerText = `${left} MSGS LEFT`;
-                pill.style.color = "#000";
-                document.getElementById("paywall").classList.add("hidden");
-            } else {
-                dot.classList.remove("active");
-                text.innerText = "GUEST MODE";
-            }
-        }
-
-        async function sendMessage() {
-            let input = document.getElementById("userInput");
-            let text = input.value.trim();
+        function sendMessage() {
+            const text = userInput.value.trim();
             if (!text) return;
+            addMessage(text, 'user');
+            userInput.value = '';
+            typingIndicator.style.display = 'flex';
+            chatBox.scrollTop = chatBox.scrollHeight;
 
-            const limit = isPremium ? PAID_LIMIT : FREE_LIMIT;
-            
-            if (msgCount >= limit) {
-                document.getElementById("paywall").classList.remove("hidden");
-                if (isPremium) {
-                    document.querySelector(".lock-title").innerText = "Daily Limit Reached";
-                    document.getElementById("lock-msg").innerText = "You've been working hard! Rest up and come back tomorrow.";
+            fetch('/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text, access_key: userKey })
+            })
+            .then(response => response.json())
+            .then(data => {
+                typingIndicator.style.display = 'none';
+                if (data.is_premium) {
+                    statusBadge.textContent = "★ PREMIUM COACH";
+                    statusBadge.classList.add('premium');
+                } else {
+                    statusBadge.textContent = "• FREE DIAGNOSTIC";
+                    statusBadge.classList.remove('premium');
                 }
-                return;
-            }
-
-            let chat = document.getElementById("chat");
-            chat.innerHTML += `<div class="msg user">${text}</div>`;
-            input.value = "";
-            chat.scrollTop = chat.scrollHeight;
-            
-            msgCount++;
-            localStorage.setItem("msgCount", msgCount);
-            updateUI(isPremium);
-
-            try {
-                let response = await fetch("/chat", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({ message: text, is_paid: isPremium })
-                });
-                let data = await response.json();
-                chat.innerHTML += `<div class="msg bot">${data.reply}</div>`;
-                chat.scrollTop = chat.scrollHeight;
-            } catch (e) {
-                console.log(e);
-            }
+                addMessage(data.reply, 'bot');
+            })
+            .catch(error => {
+                typingIndicator.style.display = 'none';
+                addMessage("Connection error.", 'bot');
+            });
         }
     </script>
 </body>
@@ -284,45 +202,63 @@ HTML_PAGE = """
 
 @app.route('/')
 def home():
-    return render_template_string(HTML_PAGE, shopify_url=SHOPIFY_PRODUCT_URL, access_key=CURRENT_ACCESS_KEY)
+    return render_template_string(HTML_PAGE, shopify_url=SHOPIFY_PRODUCT_URL)
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    # ЗАЩИТА ОТ КРАША: Проверяем ключ ВНУТРИ запроса, а не при старте
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return jsonify({"reply": "⚠️ SYSTEM ERROR: OpenAI API Key is missing in Railway. Please add it to Variables."})
-    
-    # Создаем клиента только когда он нужен
-    client = OpenAI(api_key=api_key)
-
     data = request.json
     user_input = data.get("message", "")
-    is_paid = data.get("is_paid", False)
+    user_key = data.get("access_key", "")
 
-    # ^^^ ТУТ УЖЕ ЕСТЬ 4 ПРОБЕЛА
-    system = SYSTEM_COACH if is_paid else SYSTEM_SALES
+    # Проверка доступа
+    is_paid = (user_key == CURRENT_ACCESS_KEY)
+    user_ip = request.remote_addr
+    user_data = user_limits[user_ip]
 
+    # Сброс счетчика ТОЛЬКО для paid раз в 24 часа
+    # (Free пользователи имеют общий лимит 30 сообщений навсегда, без сброса)
+    if is_paid and (datetime.now() - user_data['last_reset'] > timedelta(hours=24)):
+        user_data['count'] = 0
+        user_data['last_reset'] = datetime.now()
+
+    # Выбор лимита
+    current_limit = HARD_LIMIT_PAID if is_paid else HARD_LIMIT_FREE
+
+    # Проверка лимита (Hard Stop)
+    if user_data['count'] >= current_limit:
+        reply_text = (
+            "We’ve done a lot of focused work today. Let's take a break and continue tomorrow with fresh energy."
+            if is_paid else
+            "We’ve reached the limit of this free diagnostic session (30 messages). To build your actual plan and go deeper, full coaching is waiting for you."
+        )
+        return jsonify({"reply": reply_text, "is_premium": is_paid})
+
+    # Увеличиваем счетчик
+    user_data['count'] += 1
+
+    # Логирование
+    user_status = "👑 PREMIUM" if is_paid else "👤 FREE"
+    print(f"🚀 LOG: IP={user_ip} | MSG={user_data['count']}/{current_limit} | STATUS={user_status}")
+
+    # Подготовка системного промпта
+    system_role = SYSTEM_COACH if is_paid else SYSTEM_SALES
+    system_prompt = f"{system_role}\n\nCURRENT MESSAGE COUNT: {user_data['count']}"
+
+    # Запрос к OpenAI
     try:
-        # Пауза 6 секунд
-        time.sleep(6)
-
         completion = client.chat.completions.create(
             model=MODEL,
             messages=[
-                {"role": "system", "content": system},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_input}
             ]
         )
-
         reply = completion.choices[0].message.content
-
     except Exception as e:
-        reply = f"Error: {str(e)}"
+        reply = f"System Error: {str(e)}"
 
-    return jsonify({"reply": reply})
+    return jsonify({"reply": reply, "is_premium": is_paid})
 
-# А ВОТ ЭТО ДОЛЖНО БЫТЬ ПРИЖАТО К ЛЕВОМУ КРАЮ (БЕЗ ПРОБЕЛОВ):
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
