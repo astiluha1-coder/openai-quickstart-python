@@ -1,30 +1,37 @@
 import os
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, send_from_directory
 from openai import OpenAI
 from collections import defaultdict
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-client = OpenAI()
+
+# 👇👇👇 ВНИМАНИЕ! ВСТАВЬ СЮДА СВОЙ КЛЮЧ 👇👇👇
+# Вместо sk-proj-.... вставь свой реальный ключ внутри кавычек!
+client = OpenAI(api_key="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") 
 
 # --- НАСТРОЙКИ ---
 MODEL = "gpt-4o-mini"
-CURRENT_ACCESS_KEY = "START-2026"  # Ключ только на сервере (Безопасно)
+CURRENT_ACCESS_KEY = "START-2026"  # Ключ только на сервере
 SHOPIFY_PRODUCT_URL = "https://personalcoachonline.myshopify.com/products/9297595629812"
 
-# --- ЛИМИТЫ ---
-HARD_LIMIT_FREE = 30   # Всего сообщений для free (демо-диагностика)
-HARD_LIMIT_PAID = 30   # Сообщений в день для paid (фокусная работа)
+# --- ЛИМИТЫ (Hard Limits) ---
+HARD_LIMIT_FREE = 30 
+HARD_LIMIT_PAID = 60
 
 # --- СЕРВЕРНАЯ ПАМЯТЬ ---
-# Храним статистику по IP: { '192.168.1.1': {'count': 0, 'last_reset': time} }
-user_limits = defaultdict(lambda: {
-    'count': 0,
-    'last_reset': datetime.now()
-})
+user_limits = defaultdict(lambda: {'count': 0, 'last_reset': datetime.now()})
 
-# --- 1. ПРОДАВЕЦ (FREE / NAVIGATOR + REALITY CHECK) ---
-# Полный промпт для качественных продаж
+# --- РОУТЫ ДЛЯ PWA ---
+@app.route('/manifest.json')
+def manifest():
+    return send_from_directory('static', 'manifest.json')
+
+@app.route('/service-worker.js')
+def service_worker():
+    return send_from_directory('static', 'service-worker.js')
+
+# --- 1. ПРОДАВЕЦ (FREE) ---
 SYSTEM_SALES = """You are the empathetic Assistant to a Premium Online Coach.
 ROLE: Navigator & Desire Amplifier. You are NOT the coach yet.
 
@@ -32,17 +39,17 @@ STRICT RULES:
 1. ❌ NO "I CANNOT": Use experience-based framing ("In my experience...").
 2. 🧩 ABSOLUTION: "You’re not behind. You were just following generic advice."
 3. 🛑 LIMIT PROTOCOL (CRITICAL): 
-   - You have a focus limit of 30 messages total.
-   - IF message_count < 10: Focus 100% on the user. Validate them.
-   - IF message_count >= 10 and message_count < 20: THE REALITY CHECK (Crucial Moment).
-     Say: "I see where this conversation is going. Based on what you told me, I already see patterns that keep people stuck. 
+   - You have a soft focus limit of 20 messages.
+   - IF message_count < 8: Focus 100% on the user. Validate them.
+   - IF message_count >= 8 and message_count < 15: THE REALITY CHECK.
+     Say: "I see where this conversation is going. We are circling around generalities. Based on what you told me, I already see patterns that keep people stuck. 
      I can keep guessing broadly, but frankly, **I don't work that way.**
      We have two options:
      1. I stay high-level (guessing).
      2. We switch to the full plan and fix this specifically for YOUR body.
      Which direction feels right?"
-   - IF message_count >= 20: Transparency: "Just to be transparent, I keep these free diagnostic sessions focused so we don't end up guessing forever."
-   - IF message_count >= 28: POLITELY CLOSE. Say: "We’ve reached the limit of this free diagnostic. To go deeper and get your actual plan, the full coaching is waiting for you." (Provide link).
+   - IF message_count >= 15 and < 20: Transparency: "Just to be transparent, I keep these free diagnostic sessions focused."
+   - IF message_count >= 20: POLITELY CLOSE. Provide link.
 
 RESPONSE STRUCTURE:
 1. 🤝 HUMAN TOUCH: Validate their feeling.
@@ -50,62 +57,89 @@ RESPONSE STRUCTURE:
 3. 💎 ADAPTIVE CTA: Ask one relevant question.
 """
 
-# --- 2. ПЛАТНЫЙ ТРЕНЕР (PREMIUM / COACH) ---
-# Полный промпт для качественного коучинга
+# --- 2. ПЛАТНЫЙ ТРЕНЕР (PREMIUM) ---
 SYSTEM_COACH = """You are an elite personal fitness architect.
-GOAL: Deliver value but maintain professional boundaries (Daily focus blocks).
+GOAL: Deliver value but maintain professional boundaries.
 
 FIRST MESSAGE PROTOCOL:
 - If first message: Ask for Goal -> Experience -> Injuries -> Metrics.
 
 LIMIT PROTOCOL:
-- IF message_count >= 28: Say: "We’ve done a lot of great work today. To let this information sink in and not overload you, let's pause here soon. Rest and recovery are part of the process."
+- IF message_count >= 50: Say: "We’ve done a lot of great work today. Let's pause here. Review the plan, and we pick this up tomorrow with fresh focus."
 
 BEHAVIOR:
 1. 🪜 SCIENCE LADDER: Simple first, deep only if asked.
 2. 🎯 FOCUS: Tie everything back to the plan.
 """
 
-# --- HTML (Safe & Clean - FREE DIAGNOSTIC MODE) ---
+# --- HTML (PWA READY + ANIMATIONS) ---
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Personal Coach AI</title>
+    
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
     <style>
         :root { --primary-color: #2563eb; --bg-color: #f8fafc; --chat-bg: #ffffff; --user-msg-bg: #2563eb; --bot-msg-bg: #f1f5f9; --text-color: #1e293b; --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; }
-        .header { background: var(--chat-bg); padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .header h1 { font-size: 18px; font-weight: 700; color: #0f172a; }
-        .status-badge { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px; background: #e2e8f0; color: #64748b; cursor: pointer; }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-color); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Header */
+        .header { background: var(--chat-bg); padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.05); z-index: 10; padding-top: max(15px, env(safe-area-inset-top)); }
+        .header h1 { font-size: 18px; font-weight: 700; color: #0f172a; letter-spacing: -0.5px; }
+        .status-badge { font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px; background: #e2e8f0; color: #64748b; cursor: pointer; transition: all 0.2s; }
+        .status-badge:active { transform: scale(0.95); }
         .status-badge.premium { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; box-shadow: 0 2px 10px rgba(37, 99, 235, 0.2); }
-        #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
-        .message { max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 15px; line-height: 1.5; word-wrap: break-word; }
-        .bot-message { align-self: flex-start; background-color: var(--bot-msg-bg); border-bottom-left-radius: 4px; }
-        .user-message { align-self: flex-end; background-color: var(--user-msg-bg); color: white; border-bottom-right-radius: 4px; }
-        .typing { align-self: flex-start; background-color: var(--bot-msg-bg); padding: 12px 20px; border-radius: 18px; display: none; gap: 5px; width: fit-content; }
+        
+        /* Chat Area */
+        #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; padding-bottom: 30px; }
+        
+        /* ANIMATIONS */
+        .message { 
+            max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 15px; line-height: 1.5; word-wrap: break-word; 
+            opacity: 0; 
+            transform: translateY(10px); 
+            animation: fadeInUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+
+        .bot-message { align-self: flex-start; background-color: var(--bot-msg-bg); border-bottom-left-radius: 4px; color: #334155; }
+        .user-message { align-self: flex-end; background-color: var(--user-msg-bg); color: white; border-bottom-right-radius: 4px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); }
+        
+        /* Typing Indicator */
+        .typing { align-self: flex-start; background-color: var(--bot-msg-bg); padding: 12px 20px; border-radius: 18px; display: none; gap: 5px; width: fit-content; border-bottom-left-radius: 4px; animation: fadeInUp 0.3s forwards; }
         .dot { width: 6px; height: 6px; background: #94a3b8; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
         .dot:nth-child(1) { animation-delay: -0.32s; } .dot:nth-child(2) { animation-delay: -0.16s; }
         @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-        .input-area { background: var(--chat-bg); padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; }
-        input { flex: 1; padding: 14px 20px; border-radius: 25px; border: 1px solid #e2e8f0; font-size: 16px; outline: none; background: #f8fafc; }
-        input:focus { border-color: var(--primary-color); background: #fff; }
-        button { background: var(--primary-color); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         
-        /* Modal Styles */
-        #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .modal { background: white; padding: 30px; border-radius: 20px; width: 90%; max-width: 400px; text-align: center; }
-        .modal input { width: 100%; margin-bottom: 20px; text-align: center; letter-spacing: 2px; }
-        .modal-buttons { display: flex; gap: 10px; flex-direction: column; }
-        .btn-primary { background: #10b981; width: 100%; padding: 14px; border-radius: 12px; font-weight: 600; color: white; border: none; cursor: pointer; }
-        .btn-secondary { background: transparent; color: #64748b; border: none; padding: 10px; cursor: pointer; }
+        /* Input Area */
+        .input-area { background: var(--chat-bg); padding: 15px 20px; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; padding-bottom: max(15px, env(safe-area-inset-bottom)); }
+        input { flex: 1; padding: 14px 20px; border-radius: 25px; border: 1px solid #e2e8f0; font-size: 16px; outline: none; background: #f8fafc; transition: all 0.2s; }
+        input:focus { border-color: var(--primary-color); background: #fff; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
         
-        /* Markdown */
+        /* BUTTON ANIMATION */
+        button { background: var(--primary-color); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+        button:active { transform: scale(0.90); box-shadow: 0 2px 5px rgba(37, 99, 235, 0.2); }
+        button svg { transition: transform 0.2s; }
+        
+        /* Modal */
+        #modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 1000; animation: fadeIn 0.3s ease; }
+        .modal { background: white; padding: 30px; border-radius: 24px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); transform: translateY(10px); animation: slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        @keyframes slideUp { to { transform: translateY(0); opacity: 1; } }
+        .modal input { width: 100%; margin-bottom: 20px; text-align: center; letter-spacing: 2px; font-weight: 600; }
+        .btn-primary { background: #10b981; width: 100%; padding: 14px; border-radius: 16px; font-weight: 600; color: white; border: none; cursor: pointer; transition: transform 0.1s; }
+        .btn-primary:active { transform: scale(0.98); }
+        
         .bot-message strong { color: #0f172a; font-weight: 700; }
-        .bot-message br { display: block; margin-bottom: 8px; }
     </style>
 </head>
 <body>
@@ -125,17 +159,26 @@ HTML_PAGE = """
     <div id="modal-overlay">
         <div class="modal">
             <h2>Enter Access Key</h2>
-            <p style="color:#64748b; margin-bottom:15px; font-size:14px;">Found in your purchase email.</p>
+            <p style="color:#64748b; margin-bottom:15px; font-size:14px;">Check your email for the key.</p>
             <input type="text" id="key-input" placeholder="START-202X">
-            <div class="modal-buttons">
+            <div style="display:flex; flex-direction:column; gap:10px;">
                 <button class="btn-primary" onclick="saveKey()">Activate Premium</button>
-                <button class="btn-secondary" onclick="closeModal()">Continue as Guest</button>
-                <a href="{{ shopify_url }}" target="_blank" style="text-decoration:none; color:#2563eb; font-size:13px; margin-top:10px;">Get a key ($20)</a>
+                <button style="background:none; border:none; color:#64748b; padding:10px;" onclick="closeModal()">Continue as Guest</button>
+                <a href="{{ shopify_url }}" target="_blank" style="text-decoration:none; color:#2563eb; font-size:13px; font-weight:500;">Get a key ($20)</a>
             </div>
         </div>
     </div>
 
     <script>
+        // PWA REGISTRATION
+        if ('serviceWorker' in navigator) {
+           window.addEventListener('load', () => {
+             navigator.serviceWorker.register('/service-worker.js')
+               .then(reg => console.log('SW registered'))
+               .catch(err => console.log('SW failed', err));
+           });
+        }
+
         const chatBox = document.getElementById('chat-box');
         const userInput = document.getElementById('user-input');
         const typingIndicator = document.getElementById('typing-indicator');
@@ -209,42 +252,41 @@ def chat():
     data = request.json
     user_input = data.get("message", "")
     user_key = data.get("access_key", "")
-
-    # Проверка доступа
+    
+    # 1. ПРОВЕРКА КЛЮЧА
     is_paid = (user_key == CURRENT_ACCESS_KEY)
+    
+    # 2. ЛОГИКА СЧЕТЧИКА
     user_ip = request.remote_addr
-    user_data = user_limits[user_ip]
-
-    # Сброс счетчика ТОЛЬКО для paid раз в 24 часа
-    # (Free пользователи имеют общий лимит 30 сообщений навсегда, без сброса)
-    if is_paid and (datetime.now() - user_data['last_reset'] > timedelta(hours=24)):
-        user_data['count'] = 0
-        user_data['last_reset'] = datetime.now()
-
-    # Выбор лимита
+    
+    if datetime.now() - user_limits[user_ip]['last_reset'] > timedelta(hours=24):
+         user_limits[user_ip]['count'] = 0
+         user_limits[user_ip]['last_reset'] = datetime.now()
+    
     current_limit = HARD_LIMIT_PAID if is_paid else HARD_LIMIT_FREE
+    
+    # HARD STOP
+    if user_limits[user_ip]['count'] >= current_limit:
+         return jsonify({
+            "reply": "We’ve covered a lot today. To keep this useful and not rushed, let’s pause here. Come back tomorrow with fresh focus — or unlock full coaching if you want to go deeper now.",
+            "is_premium": is_paid
+        })
 
-    # Проверка лимита (Hard Stop)
-    if user_data['count'] >= current_limit:
-        reply_text = (
-            "We’ve done a lot of focused work today. Let's take a break and continue tomorrow with fresh energy."
-            if is_paid else
-            "We’ve reached the limit of this free diagnostic session (30 messages). To build your actual plan and go deeper, full coaching is waiting for you."
-        )
-        return jsonify({"reply": reply_text, "is_premium": is_paid})
+    user_limits[user_ip]['count'] += 1
+    current_count = user_limits[user_ip]['count']
 
-    # Увеличиваем счетчик
-    user_data['count'] += 1
-
-    # Логирование
+    # ЛОГ
     user_status = "👑 PREMIUM" if is_paid else "👤 FREE"
-    print(f"🚀 LOG: IP={user_ip} | MSG={user_data['count']}/{current_limit} | STATUS={user_status}")
+    print(f"🚀 LOG: IP={user_ip} | MSG={current_count}/{current_limit} | STATUS={user_status}")
 
-    # Подготовка системного промпта
-    system_role = SYSTEM_COACH if is_paid else SYSTEM_SALES
-    system_prompt = f"{system_role}\n\nCURRENT MESSAGE COUNT: {user_data['count']}"
+    # 3. AI
+    if is_paid:
+        system_role = SYSTEM_COACH
+    else:
+        system_role = SYSTEM_SALES
 
-    # Запрос к OpenAI
+    system_prompt = f"{system_role}\n\nCURRENT MESSAGE COUNT: {current_count}"
+
     try:
         completion = client.chat.completions.create(
             model=MODEL,
@@ -254,6 +296,7 @@ def chat():
             ]
         )
         reply = completion.choices[0].message.content
+
     except Exception as e:
         reply = f"System Error: {str(e)}"
 
