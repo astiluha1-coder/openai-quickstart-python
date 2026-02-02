@@ -285,10 +285,11 @@ def chat():
     user_input = data.get("message", "")
     is_paid = data.get("is_paid", False)
 
-system = SYSTEM_COACH if is_paid else SYSTEM_SALES
+    # ^^^ ТУТ УЖЕ ЕСТЬ 4 ПРОБЕЛА
+    system = SYSTEM_COACH if is_paid else SYSTEM_SALES
 
     try:
-        # Имитация, что бот "печатает" 6 секунд
+        # Пауза 6 секунд
         time.sleep(6)
 
         completion = client.chat.completions.create(
@@ -306,7 +307,7 @@ system = SYSTEM_COACH if is_paid else SYSTEM_SALES
 
     return jsonify({"reply": reply})
 
+# А ВОТ ЭТО ДОЛЖНО БЫТЬ ПРИЖАТО К ЛЕВОМУ КРАЮ (БЕЗ ПРОБЕЛОВ):
 if __name__ == '__main__':
-    # ВАЖНО ДЛЯ RAILWAY: Слушаем правильный порт
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
