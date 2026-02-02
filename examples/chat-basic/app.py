@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # 👇👇👇 ВНИМАНИЕ! ВСТАВЬ СЮДА СВОЙ КЛЮЧ 👇👇👇
 # Вместо sk-proj-.... вставь свой реальный ключ внутри кавычек!
-client = OpenAI(api_key="") 
+client = OpenAI() 
 
 # --- НАСТРОЙКИ ---
 MODEL = "gpt-4o-mini"
