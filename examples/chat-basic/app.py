@@ -9,7 +9,7 @@ client = OpenAI()  # <--- ВОТ ЭТОЙ СТРОЧКИ НЕ ХВАТАЛО!
 MODEL = "gpt-5o-mini"  # <--- Исправил опечатку (было 5o)
 
 # Твоя ссылка на товар (проверь, что она верная!)
-SHOPIFY_PRODUCT_URL =  https://personalcoachonline.myshopify.com/products/9297595629812
+SHOPIFY_PRODUCT_URL =  "https://personalcoachonline.myshopify.com/products/9297595629812"
 
 # --- МОЗГИ ---
 SYSTEM_SALES = """You are a fitness assistant designed to demonstrate the potential of AI coaching. 
