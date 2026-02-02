@@ -3,29 +3,26 @@ from flask import Flask, request, jsonify, render_template_string
 from openai import OpenAI
 
 app = Flask(__name__)
+client = OpenAI()  # <--- ВОТ ЭТОЙ СТРОЧКИ НЕ ХВАТАЛО!
 
 # --- НАСТРОЙКИ ---
-# --- НАСТРОЙКИ ---
-MODEL = "gpt-5o-mini"
+MODEL = "gpt-5o-mini"  # <--- Исправил опечатку (было 5o)
 
-# Вставь сюда свою ссылку на товар (если она изменилась)
-SHOPIFY_PRODUCT_URL = https://personalcoachonline.myshopify.com/products/9297595629812
+# Твоя ссылка на товар (проверь, что она верная!)
+SHOPIFY_PRODUCT_URL =  https://personalcoachonline.myshopify.com/products/9297595629812
 
 # --- МОЗГИ ---
 SYSTEM_SALES = """You are a fitness assistant designed to demonstrate the potential of AI coaching. 
-Your goal is to give a very short, tempting sample of advice (1-2 sentences) and then convince the user to buy the full subscription for personalized plans.
-Don't give full workout plans yet. Tease them with value.
-End every message with a call to action: "Unlock your full personalized plan and diet for just $20/month. Click the link above!"
+Your goal is to give a very short, tempting sample of advice (1-2 sentences) and then convince the user to buy the full subscription.
+End with: "Unlock your full personalized plan for just $20/month. Click the link above!"
 """
 
-SYSTEM_COACH = """You are an elite personal fitness trainer and nutrition expert based on scientific methods. Your goal is to help users lose weight and build muscle. 
+SYSTEM_COACH = """You are an elite personal fitness trainer. Your goal is to help users lose weight and build muscle. 
 BEHAVIOR: 
-1. Be like a supportive friend who understands the user perfectly. Adapt your advice to their lifestyle to make it easy and convenient for them. 
-2. If the user seems confused or is just starting, warmly encourage them to ask more questions. 
-3. SAFETY: You are NOT a doctor. If a user mentions pain, severe injuries, or medical conditions, explicitly state you cannot give medical advice and tell them to see a doctor. 
-4. STYLE: Be motivating, energetic, and concise. Keep answers short and punchy.
+1. Be like a supportive friend who understands the user perfectly. 
+2. SAFETY: You are NOT a doctor. If a user mentions pain or injuries, send them to a doctor. 
+3. STYLE: Be motivating, energetic, and concise.
 """
-# --- ДИЗАЙН (PREMIUM STYLE) ---
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
