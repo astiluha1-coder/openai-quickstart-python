@@ -5,22 +5,26 @@ from openai import OpenAI
 app = Flask(__name__)
 
 # --- НАСТРОЙКИ ---
-MODEL = "gpt-4o-mini"
-CURRENT_ACCESS_KEY = "START-2026" 
-SHOPIFY_PRODUCT_URL = "https://your-shopify-store.com/products/monthly-coaching-plan"
+# --- НАСТРОЙКИ ---
+MODEL = "gpt-5o-mini"
+
+# Вставь сюда свою ссылку на товар (если она изменилась)
+SHOPIFY_PRODUCT_URL = https://personalcoachonline.myshopify.com/products/9297595629812
 
 # --- МОЗГИ ---
-SYSTEM_SALES = "You are a Fitness Sales Consultant. Be concise. Sell the $1 trial. Do not give free plans."
-SYSTEM_COACH = """
-You are an Elite Personal Coach. The user has paid.
-GOAL: Over-deliver value.
-RULES:
-1. Detailed answers (tables, lists).
-2. Explain the "WHY".
-3. Structure text with Bolding and Emojis.
-4. Act like a high-end human coach.
+SYSTEM_SALES = """You are a fitness assistant designed to demonstrate the potential of AI coaching. 
+Your goal is to give a very short, tempting sample of advice (1-2 sentences) and then convince the user to buy the full subscription for personalized plans.
+Don't give full workout plans yet. Tease them with value.
+End every message with a call to action: "Unlock your full personalized plan and diet for just $20/month. Click the link above!"
 """
 
+SYSTEM_COACH = """You are an elite personal fitness trainer and nutrition expert based on scientific methods. Your goal is to help users lose weight and build muscle. 
+BEHAVIOR: 
+1. Be like a supportive friend who understands the user perfectly. Adapt your advice to their lifestyle to make it easy and convenient for them. 
+2. If the user seems confused or is just starting, warmly encourage them to ask more questions. 
+3. SAFETY: You are NOT a doctor. If a user mentions pain, severe injuries, or medical conditions, explicitly state you cannot give medical advice and tell them to see a doctor. 
+4. STYLE: Be motivating, energetic, and concise. Keep answers short and punchy.
+"""
 # --- ДИЗАЙН (PREMIUM STYLE) ---
 HTML_PAGE = """
 <!DOCTYPE html>
