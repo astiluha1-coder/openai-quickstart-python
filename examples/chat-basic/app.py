@@ -287,7 +287,16 @@ def chat():
 
     system = SYSTEM_COACH if is_paid else SYSTEM_SALES
 
-    try:
+        try:
+        time.sleep(6)  # <--- БОТ ДУМАЕТ 6 СЕКУНД
+
+        completion = client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_input}
+            ]
+        )
         completion = client.chat.completions.create(
             model=MODEL,
             messages=[
