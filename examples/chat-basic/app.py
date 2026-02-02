@@ -7,7 +7,7 @@ app = Flask(__name__)
 client = OpenAI()
 
 # --- НАСТРОЙКИ ---
-MODEL = "gpt-5o-mini"
+MODEL = "gpt-4o-mini"
 CURRENT_ACCESS_KEY = "START-2026"
 SHOPIFY_PRODUCT_URL = "https://personalcoachonline.myshopify.com/products/9297595629812"
 
