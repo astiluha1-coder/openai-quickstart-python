@@ -3,13 +3,13 @@ from flask import Flask, request, jsonify, render_template_string
 from openai import OpenAI
 
 app = Flask(__name__)
-client = OpenAI()  # <--- ВОТ ЭТОЙ СТРОЧКИ НЕ ХВАТАЛО!
+client = OpenAI()
 
 # --- НАСТРОЙКИ ---
-MODEL = "gpt-5o-mini"  # <--- Исправил опечатку (было 5o)
+MODEL = "gpt-4o-mini"  # Исправил название модели!
 
-# Твоя ссылка на товар (проверь, что она верная!)
-SHOPIFY_PRODUCT_URL =  "https://personalcoachonline.myshopify.com/products/9297595629812"
+# Ссылка ОБЯЗАТЕЛЬНО в кавычках:
+SHOPIFY_PRODUCT_URL = "https://personalcoachonline.myshopify.com/products/9297595629812"
 
 # --- МОЗГИ ---
 SYSTEM_SALES = """You are a fitness assistant designed to demonstrate the potential of AI coaching. 
