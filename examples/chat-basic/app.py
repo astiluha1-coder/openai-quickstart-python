@@ -7,7 +7,7 @@ client = OpenAI()
 
 # --- НАСТРОЙКИ ---
 MODEL = "gpt-4o-mini"  # Исправил название модели!
-
+CURRENT_ACCESS_KEY = "START-2026"
 # Ссылка ОБЯЗАТЕЛЬНО в кавычках:
 SHOPIFY_PRODUCT_URL = "https://personalcoachonline.myshopify.com/products/9297595629812"
 
