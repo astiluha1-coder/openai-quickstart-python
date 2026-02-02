@@ -285,10 +285,10 @@ def chat():
     user_input = data.get("message", "")
     is_paid = data.get("is_paid", False)
 
-    system = SYSTEM_COACH if is_paid else SYSTEM_SALES
+system = SYSTEM_COACH if is_paid else SYSTEM_SALES
 
- try:
-        # Пауза для имитации "печатания"
+    try:
+        # Имитация, что бот "печатает" 6 секунд
         time.sleep(6)
 
         completion = client.chat.completions.create(
@@ -303,6 +303,8 @@ def chat():
 
     except Exception as e:
         reply = f"Error: {str(e)}"
+
+    return jsonify({"reply": reply})
 
 if __name__ == '__main__':
     # ВАЖНО ДЛЯ RAILWAY: Слушаем правильный порт
