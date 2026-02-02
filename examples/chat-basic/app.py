@@ -287,8 +287,9 @@ def chat():
 
     system = SYSTEM_COACH if is_paid else SYSTEM_SALES
 
-      try:
-        time.sleep(6)
+  try:
+        # Имитируем, что тренер печатает 6 секунд
+        time.sleep(6) 
 
         completion = client.chat.completions.create(
             model=MODEL,
@@ -297,17 +298,11 @@ def chat():
                 {"role": "user", "content": user_input}
             ]
         )
-        completion = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_input}
-            ]
-        )
+
         reply = completion.choices[0].message.content
+
     except Exception as e:
         reply = f"Error: {str(e)}"
-
     return jsonify({"reply": reply})
 
 if __name__ == '__main__':
