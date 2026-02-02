@@ -287,8 +287,8 @@ def chat():
 
     system = SYSTEM_COACH if is_paid else SYSTEM_SALES
 
-        try:
-        time.sleep(6)  # <--- БОТ ДУМАЕТ 6 СЕКУНД
+      try:
+        time.sleep(6)
 
         completion = client.chat.completions.create(
             model=MODEL,
