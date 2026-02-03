@@ -17,7 +17,6 @@ except ImportError:
 app = Flask(__name__)
 
 # --- CONFIG ---
-# Ключ теперь строго проверяется на сервере
 ACCESS_KEY = os.environ.get("ACCESS_KEY", "START-2026")
 REDIS_URL = os.environ.get("REDIS_URL") 
 client = OpenAI() 
@@ -33,7 +32,6 @@ MSG_INTERVAL_SEC = 2.0
 # 📊 ANALYTICS & LOGGING
 # ==========================================
 def log_event(event_type, user_id, details=""):
-    # Пишем в stdout, чтобы Railway/Docker подхватили это в свои логи
     print(f"[ANALYTICS] {datetime.now().isoformat()} | {event_type} | USER:{user_id} | {details}", file=sys.stdout)
     sys.stdout.flush()
 
@@ -82,11 +80,10 @@ class DataManager:
 db = DataManager()
 
 # ==========================================
-# 🔌 NEW ENDPOINT: KEY VERIFICATION
+# 🔌 ENDPOINT: KEY VERIFICATION
 # ==========================================
 @app.route('/verify', methods=['POST'])
 def verify_key():
-    # Эндпоинт, чтобы фронтенд не верил пользователю на слово
     data = request.json
     key = data.get("access_key", "")
     is_valid = (key == ACCESS_KEY)
@@ -110,7 +107,7 @@ def manifest():
 @app.route('/service-worker.js')
 def service_worker():
     sw_code = """
-    const CACHE_NAME = 'coach-v14-diamond';
+    const CACHE_NAME = 'coach-v15-ios';
     const OFFLINE_URL = '/offline.html';
     const STATIC_ASSETS = [
         '/', '/manifest.json', '/service-worker.js',
@@ -127,7 +124,6 @@ def service_worker():
         self.clients.claim();
     });
     self.addEventListener('fetch', event => {
-        // API FALLBACK
         if (event.request.method === 'POST' && (event.request.url.includes('/chat') || event.request.url.includes('/verify'))) {
              event.respondWith(
                  fetch(event.request).catch(() => {
@@ -164,7 +160,7 @@ def offline_page():
     return """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Offline</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;background:#f8fafc;color:#0f172a;text-align:center;padding:20px;margin:0}button{background:#2563eb;color:white;border:none;padding:12px 24px;border-radius:10px;font-size:16px;cursor:pointer;font-weight:600;margin-top:20px}</style></head><body><h1>⚠️ No Connection</h1><p>Please check your internet.</p><button onclick="window.location.reload()">Try Again</button></body></html>"""
 
 # ==========================================
-# 🧠 BRAIN (PROMPT ENGINEERING v2)
+# 🧠 BRAIN (PROMPT ENGINEERING)
 # ==========================================
 
 SYSTEM_SALES_BASE = """You are an Intake Specialist for an Elite Fitness Program.
@@ -199,6 +195,7 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Personal Coach</title>
     <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/192/2563eb/dumbbell.png">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -299,10 +296,8 @@ HTML_PAGE = """
             localStorage.setItem('coach_history', JSON.stringify(history));
         }
 
-        // 🔥 VALIDATE KEY ON LOAD
         let userKey = localStorage.getItem('coach_key') || ""; 
         if (userKey) {
-            // Оптимистичное обновление UI, но лучше проверить при первом запросе
             document.getElementById('badge').innerText="COACH"; 
             document.getElementById('badge').classList.add("premium");
         }
@@ -316,7 +311,6 @@ HTML_PAGE = """
 
         function openModal() { document.getElementById('modal').style.display='flex'; }
         
-        // 🔒 REAL SERVER VALIDATION
         function verifyAndSave() { 
             const val = document.getElementById('key-val').value.trim(); 
             if(!val) return;
@@ -399,10 +393,6 @@ HTML_PAGE = """
 def home():
     return render_template_string(HTML_PAGE, shopify_url=SHOPIFY_PRODUCT_URL)
 
-# ==========================================
-# 🔌 API ENDPOINTS
-# ==========================================
-
 @app.route('/verify', methods=['POST'])
 def verify():
     key = request.json.get('access_key', '')
@@ -478,7 +468,6 @@ def chat():
                 ]
                 selected_script = random.choice(scripts)
                 stage = "CLOSE"
-                # 🔥 XML-TAG PROMPTING (MODERN BEST PRACTICE)
                 stage_instruction = f"""
                 <current_stage>CLOSE (HARD SELL)</current_stage>
                 <instruction>
@@ -494,7 +483,6 @@ def chat():
                 stage = "POST-CLOSE"
                 stage_instruction = "Repeat unlock link ONCE if asked. Otherwise brief."
         
-        # Only wrap in XML if it's not the XML Close stage above to avoid double tagging
         if stage != "CLOSE":
             system_instruction = f"""{SYSTEM_SALES_BASE}
             <context>
@@ -508,7 +496,7 @@ def chat():
         else:
             system_instruction = f"{SYSTEM_SALES_BASE}\n{stage_instruction}"
 
-    # 🔁 AI RETRY LOGIC (3 Attempts + Exponential Backoff)
+    # 🔁 AI RETRY LOGIC
     reply = "System Error."
     for attempt in range(3):
         try:
@@ -524,9 +512,9 @@ def chat():
             break 
         except Exception as e:
             print(f"API Error (Attempt {attempt+1}): {e}")
-            if attempt == 2: # Failed all 3 times
+            if attempt == 2:
                 return jsonify({"reply": "AI is overloaded. Try in 5 sec.", "error": "api_fail", "is_premium": is_paid})
-            time.sleep(0.5 * (attempt + 1)) # 0.5s, 1.0s wait
+            time.sleep(0.5 * (attempt + 1))
 
     user['history'].append({"role": "user", "content": msg})
     user['history'].append({"role": "assistant", "content": reply})
