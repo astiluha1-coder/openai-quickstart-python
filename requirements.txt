@@ -23,3 +23,8 @@ requests
 flask
 openai
 redis
+flask
+openai
+redis
+python-dotenv
+marked
