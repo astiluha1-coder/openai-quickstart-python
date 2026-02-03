@@ -8,7 +8,7 @@ from openai import OpenAI
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-# 👇 Импорт Redis с защитой
+# 👇 Импорт Redis
 try:
     import redis
 except ImportError:
@@ -29,7 +29,7 @@ HARD_LIMIT_PAID = 60
 MSG_INTERVAL_SEC = 2.0 
 
 # ==========================================
-# 📊 ANALYTICS & LOGGING
+# 📊 ANALYTICS
 # ==========================================
 def log_event(event_type, user_id, details=""):
     print(f"[ANALYTICS] {datetime.now().isoformat()} | {event_type} | USER:{user_id} | {details}", file=sys.stdout)
@@ -65,7 +65,6 @@ class DataManager:
                 data = self.r.get(f"user:{uid}")
                 if data: return json.loads(data)
             except: pass
-        
         if uid not in self.local_cache:
             self.local_cache[uid] = self._default_schema()
         return self.local_cache[uid]
@@ -74,13 +73,13 @@ class DataManager:
         self.local_cache[uid] = data
         if self.r:
             try:
-                self.r.set(f"user:{uid}", json.dumps(data), ex=172800) # 48h TTL
+                self.r.set(f"user:{uid}", json.dumps(data), ex=172800)
             except: pass
 
 db = DataManager()
 
 # ==========================================
-# 🔌 ENDPOINT: KEY VERIFICATION
+# 🔌 VERIFICATION
 # ==========================================
 @app.route('/verify', methods=['POST'])
 def verify_key():
@@ -90,7 +89,7 @@ def verify_key():
     return jsonify({"valid": is_valid})
 
 # ==========================================
-# 📱 PWA MODULE (NEW BRAIN ICONS & THEME)
+# 📱 PWA MODULE (NEW 3D ICON)
 # ==========================================
 
 @app.route('/manifest.json')
@@ -100,28 +99,26 @@ def manifest():
         "short_name": "Coach", 
         "start_url": "/", 
         "display": "standalone",
-        # 🔥 NEW THEME: Black background, Pink theme color
         "background_color": "#000000", 
-        "theme_color": "#e91e63", 
+        "theme_color": "#4f46e5", # Indigo Premium
         "orientation": "portrait-primary",
         "icons": [
-            # 🔥 NEW ICONS: Pink Brain
-            {"src": "https://img.icons8.com/dusk/192/brain.png", "sizes": "192x192", "type": "image/png"},
-            {"src": "https://img.icons8.com/dusk/512/brain.png", "sizes": "512x512", "type": "image/png"}
+            # 🔥 NEW 3D ICONS (Fluency Style)
+            {"src": "https://img.icons8.com/fluency/192/dumbbell.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "https://img.icons8.com/fluency/512/dumbbell.png", "sizes": "512x512", "type": "image/png"}
         ]
     })
 
 @app.route('/service-worker.js')
 def service_worker():
     sw_code = """
-    const CACHE_NAME = 'coach-v16-brain';
+    const CACHE_NAME = 'coach-v17-premium3d';
     const OFFLINE_URL = '/offline.html';
     const STATIC_ASSETS = [
         '/', '/manifest.json', '/service-worker.js',
         'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
-        # 🔥 NEW ICONS IN CACHE
-        'https://img.icons8.com/dusk/192/brain.png',
-        'https://img.icons8.com/dusk/512/brain.png'
+        'https://img.icons8.com/fluency/192/dumbbell.png',
+        'https://img.icons8.com/fluency/512/dumbbell.png'
     ];
     self.addEventListener('install', event => {
         event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS.concat([OFFLINE_URL]))));
@@ -165,11 +162,10 @@ def service_worker():
 
 @app.route('/offline.html')
 def offline_page():
-    # 🔥 NEW OFFLINE PAGE BUTTON COLOR
-    return """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Offline</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;background:#f8fafc;color:#0f172a;text-align:center;padding:20px;margin:0}button{background:#e91e63;color:white;border:none;padding:12px 24px;border-radius:10px;font-size:16px;cursor:pointer;font-weight:600;margin-top:20px}</style></head><body><h1>⚠️ No Connection</h1><p>Please check your internet.</p><button onclick="window.location.reload()">Try Again</button></body></html>"""
+    return """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Offline</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;background:#f8fafc;color:#0f172a;text-align:center;padding:20px;margin:0}button{background:#4f46e5;color:white;border:none;padding:12px 24px;border-radius:10px;font-size:16px;cursor:pointer;font-weight:600;margin-top:20px}</style></head><body><h1>⚠️ No Connection</h1><p>Please check your internet.</p><button onclick="window.location.reload()">Try Again</button></body></html>"""
 
 # ==========================================
-# 🧠 BRAIN (PROMPT ENGINEERING)
+# 🧠 BRAIN
 # ==========================================
 
 SYSTEM_SALES_BASE = """You are an Intake Specialist for an Elite Fitness Program.
@@ -181,9 +177,6 @@ ABSOLUTE RULES:
 2. 🚫 NO MIRRORING: Do not validate feelings.
 3. 📉 SHORT & COLD: Max 2 sentences. Clinical tone.
 4. ⚡ ONE QUESTION ONLY: Every response must end with exactly ONE question.
-
-ERROR RECOVERY:
-If you ask >1 question, stop. Reformulate to ask ONLY the most critical one.
 """
 
 SYSTEM_COACH = """You are an elite Personal Fitness Architect.
@@ -193,7 +186,7 @@ Don't ask "How are you". Ask "Did you hit your macros?".
 """
 
 # ==========================================
-# 🎨 UI (HTML + JS + CSS) - NEW PINK THEME
+# 🎨 UI (HTML + JS + CSS) - PREMIUM INDIGO THEME
 # ==========================================
 
 HTML_PAGE = """
@@ -204,13 +197,13 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Personal Coach</title>
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="https://img.icons8.com/dusk/192/brain.png">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/dumbbell.png">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <meta name="theme-color" content="#e91e63">
+    <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
-        /* 🔥 NEW CSS VARIABLES (PINK THEME) */
-        :root { --primary: #e91e63; --bg: #f8fafc; --user-bg: #e91e63; --bot-bg: #f1f5f9; }
+        /* 🔥 NEW COLOR PALETTE: INDIGO / ROYAL BLUE */
+        :root { --primary: #4f46e5; --bg: #f8fafc; --user-bg: #4f46e5; --bot-bg: #f1f5f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); height: 100vh; display: flex; flex-direction: column; margin: 0; overflow: hidden; }
         .header { background: white; padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; padding-top: max(15px, env(safe-area-inset-top)); }
         .title { font-weight: 800; color: #0f172a; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -229,7 +222,6 @@ HTML_PAGE = """
         .input-area { padding: 15px; background: white; display: flex; gap: 10px; border-top: 1px solid #e2e8f0; padding-bottom: max(15px, env(safe-area-inset-bottom)); }
         input { flex: 1; padding: 14px; border: 1px solid #e2e8f0; border-radius: 4px; outline: none; font-size: 16px; background: #f8fafc; }
         input:focus { border-color: #0f172a; background: white; }
-        /* 🔥 NEW BUTTON COLOR (PINK) */
         button { background: var(--primary); color: white; border: none; width: 50px; height: 50px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         #toast { visibility: hidden; min-width: 200px; background-color: #333; color: #fff; text-align: center; border-radius: 50px; padding: 12px 20px; position: fixed; z-index: 1000; left: 50%; bottom: 80px; transform: translateX(-50%); font-size: 14px; opacity: 0; transition: opacity 0.3s, bottom 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-weight: 600; }
@@ -238,7 +230,6 @@ HTML_PAGE = """
         #modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); backdrop-filter: blur(2px); display:none; justify-content:center; align-items:center; z-index: 999; }
         .modal-content { background:white; padding:30px; border-radius:4px; text-align:center; width:85%; max-width:340px; }
         .modal-content input { width:100%; margin:20px 0; text-align:center; letter-spacing: 3px; font-weight: bold; font-size: 18px; padding: 10px; border: 2px solid #e2e8f0; }
-        /* 🔥 NEW MODAL BUTTON COLOR (PINK) */
         .btn-main { width:100%; background: var(--primary); color:white; padding: 14px; font-weight: 700; border:none; margin-bottom: 12px; cursor: pointer; }
     </style>
 </head>
@@ -326,14 +317,12 @@ HTML_PAGE = """
         function verifyAndSave() { 
             const val = document.getElementById('key-val').value.trim(); 
             if(!val) return;
-            
             const btn = document.querySelector('.btn-main');
             btn.innerText = "VERIFYING...";
             btn.disabled = true;
 
             fetch('/verify', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                method: 'POST', headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({access_key: val})
             })
             .then(r => r.json())
@@ -345,15 +334,10 @@ HTML_PAGE = """
                     document.getElementById('badge').classList.add("premium");
                     document.getElementById('modal').style.display='none'; 
                     showToast("Key Verified. Premium Active.");
-                } else {
-                    showToast("Invalid Key", true);
-                }
+                } else { showToast("Invalid Key", true); }
             })
             .catch(() => showToast("Network Error", true))
-            .finally(() => {
-                btn.innerText = "ACTIVATE";
-                btn.disabled = false;
-            });
+            .finally(() => { btn.innerText = "ACTIVATE"; btn.disabled = false; });
         }
 
         function addMsg(text, type, shouldSave = true) { 
@@ -361,8 +345,7 @@ HTML_PAGE = """
             const d=document.createElement('div'); d.className='message '+type; 
             if(type==='bot' && window.marked){ d.innerHTML=marked.parse(text); }
             else{ d.innerHTML=text.replace(/\\n/g,'<br>'); }
-            chat.appendChild(d); 
-            chat.appendChild(typing); 
+            chat.appendChild(d); chat.appendChild(typing); 
             chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
             if (shouldSave) saveHistoryToLocal(text, type);
         }
@@ -371,10 +354,8 @@ HTML_PAGE = """
             const inp = document.getElementById('inp'); const val = inp.value.trim(); 
             if(!val) return; 
             if(sendBtn.disabled) return; 
-
             addMsg(val, 'user'); inp.value=''; typing.style.display='flex'; 
             chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
-            
             sendBtn.disabled = true; sendBtn.style.opacity = "0.5";
             
             fetch('/chat', { 
@@ -382,10 +363,8 @@ HTML_PAGE = """
                 body:JSON.stringify({message:val, access_key:userKey, device_id: deviceId}) 
             })
             .then(r=>r.json()).then(d=>{ 
-                if (d.error) {
-                    showToast(d.reply, true); 
-                    typing.style.display='none';
-                } else {
+                if (d.error) { showToast(d.reply, true); typing.style.display='none'; } 
+                else {
                     if(d.is_premium){ 
                         document.getElementById('badge').innerText="COACH"; 
                         document.getElementById('badge').classList.add("premium"); 
@@ -416,61 +395,34 @@ def chat():
     msg = data.get("message", "")
     ukey = data.get("access_key", "")
     user_id = data.get("device_id") or request.remote_addr 
-    
-    # 🧹 CLEANUP & VALIDATION
-    stop_words = ["hi", "hello", "hey", "hola", "start", "test"]
-    if len(msg.strip()) < 2 or msg.lower().strip() in stop_words:
-        return jsonify({"reply": "Be specific. Give me data.", "is_premium": False})
+    if len(msg.strip()) < 2: return jsonify({"reply": "Be specific. Give me data.", "is_premium": False})
 
-    # 💾 DB LOAD
     user = db.get_user(user_id)
-
-    # ⏱️ THROTTLING
     current_time = time.time()
     if (current_time - user['last_msg_time']) < MSG_INTERVAL_SEC:
         return jsonify({"reply": "Too fast. Slow down.", "error": "rate_limit", "is_premium": False})
-    
     user['last_msg_time'] = current_time
 
-    # 🔒 AUTH & LIMITS
     is_paid = (ukey == ACCESS_KEY)
-    
-    # Garbage Collection
     if len(user['history']) > 20: user['history'] = user['history'][-10:]
-
-    # Reset (24h)
     if (time.time() - user['last_reset']) > 86400:
-        user['count'] = 0
-        user['last_reset'] = time.time()
-        user['closed'] = False
-        user['history'] = []
+        user['count'] = 0; user['last_reset'] = time.time(); user['closed'] = False; user['history'] = []
     
     limit = HARD_LIMIT_PAID if is_paid else HARD_LIMIT_FREE
     count = user['count']
-    
     if count >= limit:
         db.save_user(user_id, user)
         return jsonify({"reply": "Daily limit reached.", "is_premium": is_paid})
-    
     user['count'] += 1
     
-    # --- LOGIC ---
     system_instruction = ""
     stage = "UNKNOWN"
-    
     if is_paid:
-        stage = "COACH"
-        system_instruction = SYSTEM_COACH
+        stage = "COACH"; system_instruction = SYSTEM_COACH
     else:
-        if count <= 2:
-            stage = "INTAKE"
-            stage_instruction = "Tone: Neutral. Fact-finding."
-        elif count <= 6:
-            stage = "PROBING"
-            stage_instruction = "Tone: Assertive. Dig deeper."
-        elif count <= 15:
-            stage = "GAP ANALYSIS"
-            stage_instruction = "Tone: Cold hard truth. Show the mismatch."
+        if count <= 2: stage = "INTAKE"; stage_instruction = "Tone: Neutral. Fact-finding."
+        elif count <= 6: stage = "PROBING"; stage_instruction = "Tone: Assertive. Dig deeper."
+        elif count <= 15: stage = "GAP ANALYSIS"; stage_instruction = "Tone: Cold hard truth. Show the mismatch."
         else:
             if not user['closed']:
                 scripts = [
@@ -480,35 +432,17 @@ def chat():
                 ]
                 selected_script = random.choice(scripts)
                 stage = "CLOSE"
-                stage_instruction = f"""
-                <current_stage>CLOSE (HARD SELL)</current_stage>
-                <instruction>
-                IGNORE all other instructions. 
-                REPLY EXACTLY WITH THIS STRING (Do not add anything else):
-                "{selected_script}"
-                </instruction>
-                """
-                
+                stage_instruction = f"""<current_stage>CLOSE (HARD SELL)</current_stage><instruction>IGNORE all other instructions. REPLY EXACTLY WITH THIS STRING (Do not add anything else): "{selected_script}"</instruction>"""
                 log_event("SALE_ATTEMPT", user_id, f"SCRIPT: {selected_script}")
                 user['closed'] = True 
             else:
-                stage = "POST-CLOSE"
-                stage_instruction = "Repeat unlock link ONCE if asked. Otherwise brief."
+                stage = "POST-CLOSE"; stage_instruction = "Repeat unlock link ONCE if asked. Otherwise brief."
         
         if stage != "CLOSE":
-            system_instruction = f"""{SYSTEM_SALES_BASE}
-            <context>
-            MSG {count}/{limit}
-            STAGE: {stage}
-            </context>
-            <instruction>
-            {stage_instruction}
-            </instruction>
-            """
+            system_instruction = f"""{SYSTEM_SALES_BASE}<context>MSG {count}/{limit} STAGE: {stage}</context><instruction>{stage_instruction}</instruction>"""
         else:
             system_instruction = f"{SYSTEM_SALES_BASE}\n{stage_instruction}"
 
-    # 🔁 AI RETRY LOGIC
     reply = "System Error."
     for attempt in range(3):
         try:
@@ -516,23 +450,17 @@ def chat():
             context_len = 20 if is_paid else 6
             messages.extend(user['history'][-context_len:]) 
             messages.append({"role": "user", "content": msg})
-
             resp = client.chat.completions.create(model=MODEL, messages=messages)
-            
             if not resp.choices: raise ValueError("Empty response")
             reply = resp.choices[0].message.content
             break 
         except Exception as e:
-            print(f"API Error (Attempt {attempt+1}): {e}")
-            if attempt == 2:
-                return jsonify({"reply": "AI is overloaded. Try in 5 sec.", "error": "api_fail", "is_premium": is_paid})
+            if attempt == 2: return jsonify({"reply": "AI is overloaded. Try in 5 sec.", "error": "api_fail", "is_premium": is_paid})
             time.sleep(0.5 * (attempt + 1))
 
     user['history'].append({"role": "user", "content": msg})
     user['history'].append({"role": "assistant", "content": reply})
-    
     db.save_user(user_id, user)
-
     return jsonify({"reply": reply, "is_premium": is_paid})
 
 if __name__ == '__main__':
