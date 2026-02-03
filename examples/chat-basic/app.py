@@ -90,30 +90,38 @@ def verify_key():
     return jsonify({"valid": is_valid})
 
 # ==========================================
-# 📱 PWA MODULE
+# 📱 PWA MODULE (NEW BRAIN ICONS & THEME)
 # ==========================================
 
 @app.route('/manifest.json')
 def manifest():
     return jsonify({
-        "name": "Personal Coach", "short_name": "Coach", "start_url": "/", "display": "standalone",
-        "background_color": "#ffffff", "theme_color": "#2563eb", "orientation": "portrait-primary",
+        "name": "Personal Coach", 
+        "short_name": "Coach", 
+        "start_url": "/", 
+        "display": "standalone",
+        # 🔥 NEW THEME: Black background, Pink theme color
+        "background_color": "#000000", 
+        "theme_color": "#e91e63", 
+        "orientation": "portrait-primary",
         "icons": [
-            {"src": "https://img.icons8.com/ios-filled/192/2563eb/dumbbell.png", "sizes": "192x192", "type": "image/png"},
-            {"src": "https://img.icons8.com/ios-filled/512/2563eb/dumbbell.png", "sizes": "512x512", "type": "image/png"}
+            # 🔥 NEW ICONS: Pink Brain
+            {"src": "https://img.icons8.com/dusk/192/brain.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "https://img.icons8.com/dusk/512/brain.png", "sizes": "512x512", "type": "image/png"}
         ]
     })
 
 @app.route('/service-worker.js')
 def service_worker():
     sw_code = """
-    const CACHE_NAME = 'coach-v15-ios';
+    const CACHE_NAME = 'coach-v16-brain';
     const OFFLINE_URL = '/offline.html';
     const STATIC_ASSETS = [
         '/', '/manifest.json', '/service-worker.js',
         'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
-        'https://img.icons8.com/ios-filled/192/2563eb/dumbbell.png',
-        'https://img.icons8.com/ios-filled/512/2563eb/dumbbell.png'
+        # 🔥 NEW ICONS IN CACHE
+        'https://img.icons8.com/dusk/192/brain.png',
+        'https://img.icons8.com/dusk/512/brain.png'
     ];
     self.addEventListener('install', event => {
         event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS.concat([OFFLINE_URL]))));
@@ -157,7 +165,8 @@ def service_worker():
 
 @app.route('/offline.html')
 def offline_page():
-    return """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Offline</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;background:#f8fafc;color:#0f172a;text-align:center;padding:20px;margin:0}button{background:#2563eb;color:white;border:none;padding:12px 24px;border-radius:10px;font-size:16px;cursor:pointer;font-weight:600;margin-top:20px}</style></head><body><h1>⚠️ No Connection</h1><p>Please check your internet.</p><button onclick="window.location.reload()">Try Again</button></body></html>"""
+    # 🔥 NEW OFFLINE PAGE BUTTON COLOR
+    return """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Offline</title><style>body{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;background:#f8fafc;color:#0f172a;text-align:center;padding:20px;margin:0}button{background:#e91e63;color:white;border:none;padding:12px 24px;border-radius:10px;font-size:16px;cursor:pointer;font-weight:600;margin-top:20px}</style></head><body><h1>⚠️ No Connection</h1><p>Please check your internet.</p><button onclick="window.location.reload()">Try Again</button></body></html>"""
 
 # ==========================================
 # 🧠 BRAIN (PROMPT ENGINEERING)
@@ -184,7 +193,7 @@ Don't ask "How are you". Ask "Did you hit your macros?".
 """
 
 # ==========================================
-# 🎨 UI (HTML + JS + CSS)
+# 🎨 UI (HTML + JS + CSS) - NEW PINK THEME
 # ==========================================
 
 HTML_PAGE = """
@@ -195,12 +204,13 @@ HTML_PAGE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Personal Coach</title>
     <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/192/2563eb/dumbbell.png">
+    <link rel="apple-touch-icon" href="https://img.icons8.com/dusk/192/brain.png">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <meta name="theme-color" content="#2563eb">
+    <meta name="theme-color" content="#e91e63">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <style>
-        :root { --primary: #2563eb; --bg: #f8fafc; --user-bg: #2563eb; --bot-bg: #f1f5f9; }
+        /* 🔥 NEW CSS VARIABLES (PINK THEME) */
+        :root { --primary: #e91e63; --bg: #f8fafc; --user-bg: #e91e63; --bot-bg: #f1f5f9; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); height: 100vh; display: flex; flex-direction: column; margin: 0; overflow: hidden; }
         .header { background: white; padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; padding-top: max(15px, env(safe-area-inset-top)); }
         .title { font-weight: 800; color: #0f172a; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -219,7 +229,8 @@ HTML_PAGE = """
         .input-area { padding: 15px; background: white; display: flex; gap: 10px; border-top: 1px solid #e2e8f0; padding-bottom: max(15px, env(safe-area-inset-bottom)); }
         input { flex: 1; padding: 14px; border: 1px solid #e2e8f0; border-radius: 4px; outline: none; font-size: 16px; background: #f8fafc; }
         input:focus { border-color: #0f172a; background: white; }
-        button { background: #0f172a; color: white; border: none; width: 50px; height: 50px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
+        /* 🔥 NEW BUTTON COLOR (PINK) */
+        button { background: var(--primary); color: white; border: none; width: 50px; height: 50px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         #toast { visibility: hidden; min-width: 200px; background-color: #333; color: #fff; text-align: center; border-radius: 50px; padding: 12px 20px; position: fixed; z-index: 1000; left: 50%; bottom: 80px; transform: translateX(-50%); font-size: 14px; opacity: 0; transition: opacity 0.3s, bottom 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-weight: 600; }
         #toast.show { visibility: visible; opacity: 1; bottom: 100px; }
@@ -227,7 +238,8 @@ HTML_PAGE = """
         #modal { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); backdrop-filter: blur(2px); display:none; justify-content:center; align-items:center; z-index: 999; }
         .modal-content { background:white; padding:30px; border-radius:4px; text-align:center; width:85%; max-width:340px; }
         .modal-content input { width:100%; margin:20px 0; text-align:center; letter-spacing: 3px; font-weight: bold; font-size: 18px; padding: 10px; border: 2px solid #e2e8f0; }
-        .btn-main { width:100%; background: #10b981; color:white; padding: 14px; font-weight: 700; border:none; margin-bottom: 12px; cursor: pointer; }
+        /* 🔥 NEW MODAL BUTTON COLOR (PINK) */
+        .btn-main { width:100%; background: var(--primary); color:white; padding: 14px; font-weight: 700; border:none; margin-bottom: 12px; cursor: pointer; }
     </style>
 </head>
 <body>
