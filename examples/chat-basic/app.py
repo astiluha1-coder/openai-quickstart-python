@@ -39,22 +39,19 @@ if OPENAI_API_KEY:
     except:
         print("❌ OpenAI Client Failed to Init")
 
-MODEL = "gpt-4o-mini"
+# --- ECONOMY & MODELS ---
+MODEL_FREE = "gpt-4o-mini"
+MODEL_PAID = "gpt-4o" 
+
+HARD_LIMIT_FREE_TOTAL = 10 
+HARD_LIMIT_PAID_DAILY = 10 
 
 # --- SYSTEM SETTINGS ---
 PHOTO_UNLOCK_DAYS = 7 
 PHOTO_INTERVAL_DAYS = 7
-HARD_LIMIT_FREE = 30
-HARD_LIMIT_PAID = 60
 BACKUP_FILE = "backup_db.json"
 MAX_HISTORY_LEN = 20 
 REDIS_TTL = 2592000 # 30 Days
-
-# --- ECONOMY & MODELS ---
-MODEL_FREE = "gpt-4o-mini"
-MODEL_PAID = "gpt-4o" 
-HARD_LIMIT_FREE_TOTAL = 10 
-HARD_LIMIT_PAID_DAILY = 10 
 
 # ==========================================
 # 🛠️ HELPERS
@@ -100,10 +97,15 @@ class DataManager:
 
     def _default_schema(self):
         return {
-            'joined_at': time.time(), 'count': 0, 'count_free': 0, 'last_reset': time.time(),
-            'history': [], 'onboarding_step': 'HOOK', 
+            'joined_at': time.time(), 
+            'count': 0,       
+            'count_free': 0,  
+            'last_reset': time.time(),
+            'history': [], 
+            'onboarding_step': 'HOOK', 
             'profile': {'goal': None, 'stats': {}, 'vibe': 'MENTOR'}, 
-            'coach_notes': [], 'last_photo_time': 0
+            'coach_notes': [], 
+            'last_photo_time': 0
         }
 
     def _load_from_disk(self):
@@ -317,14 +319,12 @@ HTML_PAGE = """
 
         function openModal() { 
             document.getElementById('modal').style.display='flex';
-            // 🔥 FIX: Enable only when needed
             keyInp.disabled = false;
             keyInp.focus();
         }
         
         function closeModal() {
             document.getElementById('modal').style.display='none';
-            // 🔥 FIX: Disable immediately to kill arrows
             keyInp.disabled = true;
             keyInp.blur();
         }
@@ -401,6 +401,7 @@ HTML_PAGE = """
     </script>
 </body>
 </html>
+"""
 
 @app.route('/')
 def home(): return render_template_string(HTML_PAGE)
