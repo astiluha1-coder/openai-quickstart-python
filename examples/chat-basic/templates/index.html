@@ -3,27 +3,52 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Personal Coach</title>
-<link rel="stylesheet" href="/static/css/style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.10.2/lottie.min.js"></script>
+<title>Personal Coach Chat</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+
 <div id="app">
-    <header class="header">
-        <h1>Coach</h1>
-        <span class="badge">PRO</span>
-    </header>
-    <main class="chat-window"></main>
-    <div class="input-area">
-        <button id="plusBtn">+</button>
-        <input type="text" id="msgInput" placeholder="Message...">
-        <button id="sendBtn">→</button>
-        <div id="plusMenu" class="hidden">
-            <button id="uploadPhoto">Upload Photo</button>
-            <button id="addNote">Add Note</button>
-        </div>
+
+<header class="header">
+    <h1>Coach</h1>
+    <span class="badge">PRO</span>
+    <button id="closeBtn" class="hidden">✕</button>
+</header>
+
+<div class="chat-window"></div>
+
+<div class="input-area">
+    <button id="plusBtn">+</button>
+    <input type="text" id="userInput" placeholder="Message...">
+    <button id="sendBtn">&#9658;</button>
+</div>
+
+<div id="plusMenu" class="hidden">
+    <button id="uploadBtn">Upload Photo</button>
+    <button id="noteBtn">Add Note</button>
+
+    <div id="exerciseMenu">
+        <button data-text="Keep your back straight and go down slowly.">Push-ups</button>
+        <button data-text="Feet shoulder-width apart, keep your knees behind toes.">Squats</button>
+        <button data-text="Keep your core tight and back straight.">Plank</button>
+        <button data-text="Use full range of motion, controlled movement.">Pull-ups</button>
+        <button data-text="Step forward and lower your body slowly.">Lunges</button>
+        <button data-text="Jump with legs apart and hands overhead.">Jumping Jacks</button>
+        <button data-text="Keep a steady pace, full body exercise.">Burpees</button>
+        <button data-text="Keep your core tight, drive knees to chest alternately.">Mountain Climbers</button>
+        <button data-text="Lift shoulders off the floor, controlled motion.">Sit-ups</button>
+        <button data-text="Keep your legs straight, lift slowly.">Leg Raises</button>
+        <button data-text="Twist torso slowly, keep core tight.">Russian Twists</button>
+        <button data-text="Lift hips up, squeeze glutes at the top.">Glute Bridge</button>
+        <button data-text="Keep elbows close to body, lift weights slowly.">Bicep Curls</button>
+        <button data-text="Push weights overhead with controlled movement.">Shoulder Press</button>
+        <button data-text="Keep back straight, hinge at hips, controlled lift.">Deadlift</button>
     </div>
 </div>
-<script src="/static/js/main.js"></script>
+
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
