@@ -39,19 +39,22 @@ if OPENAI_API_KEY:
     except:
         print("❌ OpenAI Client Failed to Init")
 
-# --- ECONOMY & MODELS ---
-MODEL_FREE = "gpt-5-mini"
-MODEL_PAID = "gpt-5-mini" 
-
-HARD_LIMIT_FREE_TOTAL = 10 
-HARD_LIMIT_PAID_DAILY = 10 
+MODEL = "gpt-4o-mini"
 
 # --- SYSTEM SETTINGS ---
 PHOTO_UNLOCK_DAYS = 7 
 PHOTO_INTERVAL_DAYS = 7
+HARD_LIMIT_FREE = 30
+HARD_LIMIT_PAID = 60
 BACKUP_FILE = "backup_db.json"
 MAX_HISTORY_LEN = 20 
 REDIS_TTL = 2592000 # 30 Days
+
+# --- ECONOMY & MODELS ---
+MODEL_FREE = "gpt-4o-mini"
+MODEL_PAID = "gpt-4o" 
+HARD_LIMIT_FREE_TOTAL = 10 
+HARD_LIMIT_PAID_DAILY = 10 
 
 # ==========================================
 # 🛠️ HELPERS
@@ -97,15 +100,10 @@ class DataManager:
 
     def _default_schema(self):
         return {
-            'joined_at': time.time(), 
-            'count': 0,       
-            'count_free': 0,  
-            'last_reset': time.time(),
-            'history': [], 
-            'onboarding_step': 'HOOK', 
+            'joined_at': time.time(), 'count': 0, 'count_free': 0, 'last_reset': time.time(),
+            'history': [], 'onboarding_step': 'HOOK', 
             'profile': {'goal': None, 'stats': {}, 'vibe': 'MENTOR'}, 
-            'coach_notes': [], 
-            'last_photo_time': 0
+            'coach_notes': [], 'last_photo_time': 0
         }
 
     def _load_from_disk(self):
@@ -230,7 +228,7 @@ def get_system_prompt(profile, last_msg=""):
     """
 
 # ==========================================
-# 🎨 UI (CLEAN / LIGHT MODE / IOS FIXED)
+# 🎨 UI (IOS NATIVE FIX)
 # ==========================================
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -246,23 +244,40 @@ HTML_PAGE = """
     <style>
         :root { --bg: #ffffff; --chat-bg: #f7f7f8; --border: #e5e7eb; --user-msg: #2563eb; --bot-msg: #f3f4f6; --text-main: #111827; --text-muted: #6b7280; --accent: #2563eb; }
         * { box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text-main); height: 100dvh; width: 100%; position: fixed; top: 0; left: 0; display: flex; flex-direction: column; margin: 0; overflow: hidden; }
-        .header { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; padding-top: max(10px, env(safe-area-inset-top)); background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); }
+        
+        /* 🔥 IOS FIX: Rigid Body Lock */
+        html, body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: var(--bg); color: var(--text-main); 
+            height: 100%; 
+            width: 100%;
+            position: fixed; /* Prevents scroll bounce and jumping */
+            inset: 0;
+            overflow: hidden;
+            display: flex; flex-direction: column; 
+        }
+
+        .header { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; padding-top: max(10px, env(safe-area-inset-top)); background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); flex-shrink: 0; }
         .title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-muted); }
         .badge { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); }
         .badge.premium { background: var(--accent); color: white; border: none; }
+        
         #chat-box { flex: 1; overflow-y: auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; -webkit-overflow-scrolling: touch; }
+        
         .message { max-width: 85%; padding: 14px 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; animation: fadeIn 0.2s forwards; }
         .bot { background: var(--bot-msg); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 4px; }
         .user { background: var(--user-msg); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
         .message img { max-width: 100%; border-radius: 10px; margin-top: 8px; }
         .sys-event { text-align: center; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0; }
-        .input-area { border-top: 1px solid var(--border); padding: 12px; display: flex; gap: 10px; background: var(--bg); padding-bottom: max(15px, env(safe-area-inset-bottom)); }
+        
+        .input-area { border-top: 1px solid var(--border); padding: 12px; display: flex; gap: 10px; background: var(--bg); padding-bottom: max(15px, env(safe-area-inset-bottom)); flex-shrink: 0; }
         input[type="text"] { flex: 1; padding: 12px 14px; font-size: 16px; border-radius: 10px; border: 1px solid var(--border); outline: none; background: var(--chat-bg); color: var(--text-main); }
         input[type="text"]:focus { border-color: var(--border); background: #fff; }
         .btn-icon { width: 46px; height: 46px; border-radius: 10px; border: 1px solid var(--border); background: white; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
         .btn-send { background: var(--accent); color: white; border: none; }
+        
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
         #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
         .modal-content { background: white; padding: 24px; border-radius: 16px; width: 90%; max-width: 320px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
         .modal-content input { width: 100%; margin: 16px 0; padding: 12px; font-size: 18px; text-align: center; letter-spacing: 2px; border: 1px solid var(--border); border-radius: 8px; }
@@ -277,36 +292,69 @@ HTML_PAGE = """
     <div class="input-area">
         <input type="file" id="fileInp" accept="image/*" style="display:none" tabindex="-1" aria-hidden="true" onchange="handleFile(this)">
         <button class="btn-icon" style="color: #6b7280;" onclick="document.getElementById('fileInp').click()">📷</button>
+        
         <input type="text" id="inp" placeholder="Message..." autocomplete="off" enterkeyhint="send" onkeypress="if(event.key==='Enter') send()">
+        
         <button id="sendBtn" class="btn-icon btn-send" onclick="send()">↑</button>
     </div>
+    
     <div id="modal">
         <div class="modal-content">
             <h3 style="color:#111827; margin:0; font-size:16px;">MEMBER ACCESS</h3>
-            <input type="text" id="key-val" placeholder="ENTER KEY">
+            <input type="text" id="key-val" placeholder="ENTER KEY" disabled>
             <button class="btn-icon btn-send" style="width:100%; height:auto; padding:12px; font-size:14px; font-weight:600;" onclick="verifyAndSave()">UNLOCK</button>
-            <p onclick="document.getElementById('modal').style.display='none'" style="margin-top:20px; color:#6b7280; font-size:12px; cursor:pointer;">Close</p>
+            <p onclick="closeModal()" style="margin-top:20px; color:#6b7280; font-size:12px; cursor:pointer;">Close</p>
         </div>
     </div>
+
     <script>
         const chat = document.getElementById('chat-box');
         const inp = document.getElementById('inp');
+        const keyInp = document.getElementById('key-val');
+        
         let deviceId = localStorage.getItem('coach_uid');
         if (!deviceId) { deviceId = 'user_' + Math.random().toString(36).substr(2, 9); localStorage.setItem('coach_uid', deviceId); }
-        function openModal() { document.getElementById('modal').style.display='flex'; }
-        function verifyAndSave() {
-            const val = document.getElementById('key-val').value.trim();
-            fetch('/verify', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({access_key: val}) })
-            .then(r => r.json()).then(d => { if (d.valid) { localStorage.setItem('coach_key', val); location.reload(); } else { alert("Invalid Key"); } });
+
+        function openModal() { 
+            document.getElementById('modal').style.display='flex';
+            // 🔥 FIX: Enable only when needed
+            keyInp.disabled = false;
+            keyInp.focus();
         }
+        
+        function closeModal() {
+            document.getElementById('modal').style.display='none';
+            // 🔥 FIX: Disable immediately to kill arrows
+            keyInp.disabled = true;
+            keyInp.blur();
+        }
+        
+        function verifyAndSave() {
+            const val = keyInp.value.trim();
+            fetch('/verify', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({access_key: val}) })
+            .then(r => r.json()).then(d => { 
+                if (d.valid) { localStorage.setItem('coach_key', val); location.reload(); } 
+                else { alert("Invalid Key"); } 
+            });
+        }
+
         function addMsg(text, type, imgUrl=null) {
             const d = document.createElement('div');
             d.className = 'message ' + type;
-            if (imgUrl) { d.innerHTML = `<img src="${imgUrl}" style="max-height:150px; display:block; margin-bottom:8px;">` + (text || "Analyzing..."); } 
-            else if (type === 'user') { d.innerText = text; } 
-            else { if(type.includes('sys-')) { d.className = 'sys-event'; d.innerText = text; } else { let clean = text.replace(/\\n\\n\\n/g, "\\n\\n"); d.innerHTML = marked.parse(clean); } }
+            if (imgUrl) {
+                d.innerHTML = `<img src="${imgUrl}" style="max-height:150px; display:block; margin-bottom:8px;">` + (text || "Analyzing...");
+            } else if (type === 'user') {
+                d.innerText = text;
+            } else {
+                if(type.includes('sys-')) { d.className = 'sys-event'; d.innerText = text; } 
+                else { 
+                    let clean = text.replace(/\\n\\n\\n/g, "\\n\\n");
+                    d.innerHTML = marked.parse(clean); 
+                }
+            }
             chat.appendChild(d); chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
         }
+
         function handleFile(input) {
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
@@ -322,24 +370,37 @@ HTML_PAGE = """
                 }; reader.readAsDataURL(input.files[0]);
             }
         }
+
         function send(force=null, imgData=null) {
             let val = force || inp.value.trim();
             if (!val && !imgData) return;
             if (!force) addMsg(val, 'user', imgData);
             inp.value = ''; 
-            const payload = { message: val || "Analyze this photo.", image: imgData, access_key: localStorage.getItem('coach_key'), device_id: deviceId };
+            
+            const payload = {
+                message: val || "Analyze this photo.",
+                image: imgData,
+                access_key: localStorage.getItem('coach_key'), 
+                device_id: deviceId
+            };
+
             fetch('/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
             .then(r=>r.json()).then(d=>{
                 if (d.is_premium) { document.getElementById('badge').innerText="PREMIUM"; document.getElementById('badge').classList.add("premium"); }
                 addMsg(d.reply, d.type || 'bot');
-            }).catch(() => addMsg("Connection Error", "sys-error"));
+            })
+            .catch(() => addMsg("Connection Error", "sys-error"));
         }
+
         const hist = JSON.parse(localStorage.getItem('coach_history') || "[]");
-        if (hist.length > 0) { hist.forEach(m => addMsg(m.content, m.role === 'user' ? 'user' : 'bot')); } else { send("SYSTEM_INIT_TRIGGER"); }
+        if (hist.length > 0) {
+            hist.forEach(m => addMsg(m.content, m.role === 'user' ? 'user' : 'bot'));
+        } else {
+            send("SYSTEM_INIT_TRIGGER");
+        }
     </script>
 </body>
 </html>
-"""
 
 @app.route('/')
 def home(): return render_template_string(HTML_PAGE)
@@ -373,19 +434,15 @@ def chat():
     user = db.get_user(user_id)
     current_time = time.time()
 
-    # 🔥 ECONOMY & LIMITS LOGIC
+    # 🔥 ECONOMY
     if not is_paid:
-        # FREE TIER: Lifetime Limit
         user_free_count = user.get('count_free', 0)
         if user_free_count >= HARD_LIMIT_FREE_TOTAL:
             return jsonify({"reply": "💬 Бесплатный осмотр окончен. Чтобы тренироваться дальше, нужен доступ.", "type": "sys-event"}) 
-        
     else:
-        # PAID TIER: Daily Limit
         if (current_time - user.get('last_reset', 0)) > 86400:
             user['count'] = 0
             user['last_reset'] = current_time
-            
         if user['count'] >= HARD_LIMIT_PAID_DAILY:
             return jsonify({"reply": "💤 На сегодня всё (10/10). Дисциплина — это и отдых тоже. До завтра.", "type": "sys-event"})
 
@@ -456,9 +513,7 @@ def chat():
     time.sleep(random.uniform(0.5, 2.5))
 
     try:
-        # 🔥 SMART MODEL SELECTION
         model_to_use = MODEL_PAID if is_paid else MODEL_FREE
-        
         resp = client.chat.completions.create(model=model_to_use, messages=messages, temperature=0.65)
         reply = resp.choices[0].message.content.strip()
         if not reply: reply = "..."
@@ -466,12 +521,8 @@ def chat():
         user['history'].append({"role": "user", "content": msg})
         user['history'].append({"role": "assistant", "content": reply})
         
-        # 🔥 INCREMENT COUNTERS
         if not is_paid:
             user['count_free'] = user.get('count_free', 0) + 1
-        else:
-            # Already incremented user['count'] above
-            pass
         
         db.save_user(user_id, user)
         return jsonify({"reply": reply, "is_premium": is_paid})
