@@ -230,7 +230,7 @@ def get_system_prompt(profile, last_msg=""):
     """
 
 # ==========================================
-# 🎨 UI (SAFARI KILLER)
+# 🎨 UI (CONCRETE LAYOUT)
 # ==========================================
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -247,36 +247,60 @@ HTML_PAGE = """
         :root { --bg: #ffffff; --chat-bg: #f7f7f8; --border: #e5e7eb; --user-msg: #2563eb; --bot-msg: #f3f4f6; --text-main: #111827; --text-muted: #6b7280; --accent: #2563eb; }
         * { box-sizing: border-box; }
         
-        /* 🔥 CLEAN BODY SETUP */
+        /* 🔥 CONCRETE BODY LOCK */
+        html { height: 100dvh; overflow: hidden; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             background: var(--bg); color: var(--text-main); 
-            height: 100dvh; /* Dynamic Height is key */
+            height: 100dvh; 
             width: 100%;
-            margin: 0; 
-            display: flex; flex-direction: column; 
-            overflow: hidden; /* No bounce */
+            margin: 0;
+            position: relative; /* Fixed elements anchor to this */
+            overflow: hidden;
         }
 
-        .header { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; padding-top: max(10px, env(safe-area-inset-top)); background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); flex-shrink: 0; }
+        /* 🔥 FIXED HEADER */
+        .header { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 52px; 
+            border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; 
+            padding: 0 16px; padding-top: max(10px, env(safe-area-inset-top)); 
+            background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); 
+            z-index: 100;
+        }
         .title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-muted); }
         .badge { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); }
         .badge.premium { background: var(--accent); color: white; border: none; }
         
-        #chat-box { flex: 1; overflow-y: auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; -webkit-overflow-scrolling: touch; }
+        /* 🔥 SCROLLABLE CHAT AREA (Pinned between header and input) */
+        #chat-box { 
+            position: fixed; 
+            top: 52px; 
+            bottom: 70px; /* Space for input */
+            left: 0; width: 100%;
+            overflow-y: auto; 
+            padding: 24px 16px; 
+            display: flex; flex-direction: column; gap: 20px; 
+            -webkit-overflow-scrolling: touch;
+        }
         
         .message { max-width: 85%; padding: 14px 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; animation: fadeIn 0.2s forwards; }
         .bot { background: var(--bot-msg); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 4px; }
         .user { background: var(--user-msg); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
         .message img { max-width: 100%; border-radius: 10px; margin-top: 8px; }
-        .sys-event { text-align: center; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0; }
+        .sys-event { align-self: center; text-align: center; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0; }
         
-        .input-area { border-top: 1px solid var(--border); padding: 12px; display: flex; gap: 10px; background: var(--bg); padding-bottom: max(15px, env(safe-area-inset-bottom)); flex-shrink: 0; }
+        /* 🔥 FIXED INPUT AREA */
+        .input-area { 
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            border-top: 1px solid var(--border); padding: 12px; 
+            display: flex; gap: 10px; background: var(--bg); 
+            padding-bottom: max(15px, env(safe-area-inset-bottom)); 
+            z-index: 100;
+        }
         
-        /* 🔥 INPUT STYLING */
         input[type="text"] { 
             flex: 1; padding: 12px 14px; 
-            font-size: 16px; /* Prevents iOS Zoom */
+            font-size: 16px; 
             border-radius: 10px; border: 1px solid var(--border); 
             outline: none; background: var(--chat-bg); color: var(--text-main); 
         }
@@ -297,12 +321,16 @@ HTML_PAGE = """
         <div class="title">COACH V1</div>
         <div id="badge" class="badge" onclick="openModal()">ACCESS</div>
     </div>
+    
     <div id="chat-box"></div>
+    
     <div class="input-area">
         <input type="file" id="fileInp" accept="image/*" style="display:none" tabindex="-1" aria-hidden="true" onchange="handleFile(this)">
         <button class="btn-icon" style="color: #6b7280;" onclick="document.getElementById('fileInp').click()">📷</button>
         
-        <input type="text" id="inp" placeholder="Message..." autocomplete="off" enterkeyhint="send" onkeypress="if(event.key==='Enter') send()">
+        <input type="text" id="inp" placeholder="Message..." 
+               autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"
+               enterkeyhint="send" onkeypress="if(event.key==='Enter') send()">
         
         <button id="sendBtn" class="btn-icon btn-send" onclick="send()">↑</button>
     </div>
@@ -310,7 +338,7 @@ HTML_PAGE = """
     <div id="modal">
         <div class="modal-content">
             <h3 style="color:#111827; margin:0; font-size:16px;">MEMBER ACCESS</h3>
-            <input type="text" id="key-val" placeholder="ENTER KEY" tabindex="-1">
+            <input type="text" id="key-val" placeholder="ENTER KEY" autocomplete="off" disabled>
             <button class="btn-icon btn-send" style="width:100%; height:auto; padding:12px; font-size:14px; font-weight:600;" onclick="verifyAndSave()">UNLOCK</button>
             <p onclick="closeModal()" style="margin-top:20px; color:#6b7280; font-size:12px; cursor:pointer;">Close</p>
         </div>
@@ -326,15 +354,13 @@ HTML_PAGE = """
 
         function openModal() { 
             document.getElementById('modal').style.display='flex';
-            // Enable field only when visible
-            keyInp.setAttribute('tabindex', '0');
+            keyInp.disabled = false;
             keyInp.focus();
         }
         
         function closeModal() {
             document.getElementById('modal').style.display='none';
-            // Hide field from keyboard again
-            keyInp.setAttribute('tabindex', '-1');
+            keyInp.disabled = true;
             keyInp.blur();
         }
         
@@ -443,7 +469,6 @@ def chat():
     user = db.get_user(user_id)
     current_time = time.time()
 
-    # 🔥 ECONOMY
     if not is_paid:
         user_free_count = user.get('count_free', 0)
         if user_free_count >= HARD_LIMIT_FREE_TOTAL:
