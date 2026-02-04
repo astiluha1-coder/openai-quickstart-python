@@ -85,31 +85,55 @@ function add(msg,role,img,mid=null,typing=false){
     if(typing)d.innerHTML='<span class="typing">Coach is typing...</span>';
     else if(img)d.innerHTML=`<img src="${img}"><br>`+(msg||'Analyzing...');
     else d.innerHTML=role=='usr'?msg.replace(/\n/g,'<br>'):marked.parse(msg);
-    if(role=='usr'){ let c=document.createElement('span');c.className='msg-controls';c.innerText='✎';c.onclick=(e)=>{e.stopPropagation();edit(d.dataset.mid,msg);};d.appendChild(c);}
+    
+    if(role=='usr'){ 
+        let c=document.createElement('span');c.className='msg-controls';c.innerText='✎';
+        c.onclick=(e)=>{e.stopPropagation();edit(d.dataset.mid,msg);};
+        d.appendChild(c);
+    }
     b.appendChild(d);b.scrollTop=b.scrollHeight;
     return d;
 }
 
 function edit(mid,txt){
     let n=prompt("Edit:",txt);
-    if(n!==null && n!==txt){ let ep=n===""?'/delete':'/edit'; let body=n===""?{uid,mid}:{uid,mid,new_text:n};
-    fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).then(d=>{if(d.ok)location.reload();});}
+    if(n!==null && n!==txt){ 
+        let ep=n===""?'/delete':'/edit'; 
+        let body=n===""?{uid,mid}:{uid,mid,new_text:n};
+        fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+        .then(r=>r.json()).then(d=>{if(d.ok)location.reload();});
+    }
 }
 
 async function post(txt,img){
-    txt=txt||t.innerText.trim();if(!txt&&!img)return;
-    if(!img){add(txt,'usr');t.innerText='';}else add("Analyzing...",'usr',img);
+    txt=txt||t.innerText.trim();
+    if(!txt&&!img) return;
+    
+    if(!img){ add(txt,'usr'); t.innerText=''; } 
+    else { add("Analyzing...",'usr',img); }
 
-    let typingDiv = add('', 'bot', null, null, true); // Show typing
+    // Show typing indicator
+    let typingDiv = add('', 'bot', null, null, true);
+
     try{
         let res = await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:txt,img,uid,k:localStorage.getItem('key')})});
         let d = await res.json();
-        typingDiv.remove(); // Remove typing
-        if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";}
+        
+        // Remove typing indicator and show real message
+        typingDiv.remove();
+        
+        if(d.pro){
+            document.getElementById('sts').innerText="PRO";
+            document.getElementById('sts').className="badge pro";
+        }
         add(d.reply,'bot');
-    }catch{typingDiv.remove();add("Error connecting",'bot');}
+    } catch {
+        typingDiv.remove();
+        add("Error connecting",'bot');
+    }
 }
-function send(){post();}
+
+function send(){ post(); }
 
 t.addEventListener('keydown',(e)=>{if(e.key==='Enter'){if(e.shiftKey)return;e.preventDefault();send();}});
 t.addEventListener('paste',(e)=>{e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||e.originalEvent.clipboardData).getData('text/plain'));});
@@ -129,8 +153,9 @@ const plus=document.getElementById('plus'); const plusMenu=document.getElementBy
 plus.addEventListener('click',()=>{ plusMenu.style.display=plusMenu.style.display==='flex'?'none':'flex'; });
 document.addEventListener('click',(e)=>{ if(!plus.contains(e.target)&&!plusMenu.contains(e.target)) plusMenu.style.display='none'; });
 
+// Initial History Load
 fetch('/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:uid,k:localStorage.getItem('key')})}).then(r=>r.json()).then(d=>{
-    if(d.history&&d.history.length>0)d.history.forEach(m=>add(m.c,m.r,null,m.id));
+    if(d.history&&d.history.length>0) d.history.forEach(m=>add(m.c,m.r,null,m.id));
     else post("SYSTEM_INIT_TRIGGER");
     if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";}
 });
