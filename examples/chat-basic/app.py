@@ -1,163 +1,258 @@
-import os, time, json, threading, hmac
-from flask import Flask, request, jsonify, render_template
-from collections import defaultdict
-from openai import OpenAI
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#ffffff">
+<title>Coach</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root {
+  --bg:#fff; --text:#111; --acc:#2563eb; --bub:#f3f4f6; --usr:#2563eb;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 
-# --- CONFIG (Настройки) ---
-ACCESS_KEY = os.environ.get("ACCESS_KEY", "START-2026")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100dvh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* Учитываем безопасные зоны для всего экрана */
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
-app = Flask(__name__, template_folder='templates')
-MAX_HISTORY = 50
-FREE_MSG_LIMIT = 10
-BACKUP_FILE = "backup_db.json"
+/* HEADER - Исправлено наложение на статус-бар */
+.head {
+  position: fixed; top: 0; left: 0; width: 100%;
+  padding: 10px 15px;
+  /* Резервируем место под челку сверху */
+  padding-top: calc(10px + env(safe-area-inset-top));
+  height: auto;
+  min-height: 60px;
+  border-bottom: 1px solid #eee;
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(255,255,255,0.98);
+  backdrop-filter: blur(10px);
+  z-index: 100;
+}
+.logo { font-weight: 700; font-size: 14px; letter-spacing: 1px; color: #888; }
+.badge { font-size: 10px; border: 1px solid #ddd; padding: 3px 8px; border-radius: 20px; color: #888; cursor: pointer; }
+.badge.pro { background: var(--acc); color: white; border: none; }
 
-# --- DATA STORAGE (Хранилище данных) ---
-db = defaultdict(lambda: {
-    "history": [],
-    "step": "HOOK",
-    "profile": {"vibe": "MENTOR"},
-    "count_free": 0,
-    "count": 0
-})
-lock = threading.Lock()
+/* MESSAGES BOX */
+#box {
+  flex: 1;
+  overflow-y: auto;
+  /* Отступ сверху равен высоте шапки, снизу — высоте инпута */
+  padding: 80px 15px 100px; 
+  display: flex; flex-direction: column; gap: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+.msg {
+  max-width: 85%; padding: 10px 16px; border-radius: 18px; 
+  font-size: 16px; line-height: 1.4; word-wrap: break-word; 
+  animation: fadeUp 0.2s ease-out; position: relative;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+.bot { background: var(--bub); align-self: flex-start; border-bottom-left-radius: 4px; color: #000; }
+.usr { background: var(--usr); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg img { max-width: 100%; border-radius: 10px; margin-top: 5px; }
+.msg-controls { font-size: 12px; margin-left: 8px; cursor: pointer; opacity: 0.6; }
 
-# Загрузка бэкапа при старте, если он существует
-if os.path.exists(BACKUP_FILE):
-    try:
-        with open(BACKUP_FILE) as f:
-            backup = json.load(f)
-            for k, v in backup.items():
-                db[k] = v
-    except: pass
+/* INPUT PANEL - Исправлено для мобильных */
+.inp {
+  position: fixed; bottom: 0; left: 0; width: 100%;
+  background: #fff;
+  padding: 10px 15px;
+  /* Учет safe-area внизу (для iPhone без кнопок) */
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  border-top: 1px solid #eee;
+  display: flex; gap: 10px; z-index: 99; align-items: flex-end;
+}
+.txt-div {
+  flex: 1; padding: 10px 14px; border-radius: 22px;
+  border: 1px solid #ddd; font-size: 16px; outline: none;
+  max-height: 120px; overflow-y: auto; min-height: 44px; background: #fff;
+  caret-color: var(--acc);
+}
+.txt-div:empty:before { content: attr(data-placeholder); color: #9ca3af; }
+.txt-div:focus { border-color: var(--acc); }
 
-def save_db():
-    """Синхронное сохранение базы данных в файл"""
-    with lock:
-        try:
-            with open(BACKUP_FILE, 'w') as f:
-                json.dump(db, f)
-        except: pass
+.btn {
+  width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: none; font-size: 24px; cursor: pointer;
+  color: #555; flex-shrink: 0; background: #f3f4f6; transition: all 0.2s;
+}
+.send { background: var(--acc); color: white; }
 
-def safe_eq(a, b):
-    """Безопасное сравнение строк для ключей доступа"""
-    if not a or not b: return False
-    return hmac.compare_digest(a.encode(), b.encode())
+/* PLUS MENU - Теперь открывается над инпутом */
+#plusMenu {
+  position: absolute; 
+  bottom: calc(70px + env(safe-area-inset-bottom)); 
+  left: 15px; 
+  background: white; border: 1px solid #ddd;
+  border-radius: 15px; display: none; flex-direction: column; gap: 2px; padding: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 101;
+}
+#plusMenu div { cursor: pointer; padding: 12px 18px; border-radius: 10px; transition: background 0.15s; font-size: 15px; }
+#plusMenu div:hover { background: var(--bub); }
 
-def detect_vibe(text):
-    """Определение стиля общения коуча"""
-    t=text.lower()
-    if any(w in t for w in ["aesthetic","david","laid"]): return "AESTHETIC"
-    if any(w in t for w in ["power","squat","bench"]): return "POWER"
-    return "MENTOR"
+/* MODAL */
+#mod { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(5px); }
+.win { background: white; padding: 30px; border-radius: 20px; width: 85%; max-width: 320px; text-align: center; }
+</style>
+</head>
+<body>
 
-def get_sys(profile):
-    """Генерация системного промпта для ИИ"""
-    vibe = profile.get("vibe","MENTOR")
-    guide = "Be calm."
-    if vibe=="AESTHETIC": guide="Focus on symmetry, aesthetics, discipline. Cold tone."
-    if vibe=="POWER": guide="Focus on strength, load, eating. Heavy tone."
-    return f"Role: Personal Coach. Vibe: {vibe}. Guide: {guide}. Context: {profile.get('goal','New client')}. Rules: Human tone. Short answers."
+<div class="head">
+    <div class="logo">COACH</div>
+    <div id="sts" class="badge" onclick="showAuth()">ACCESS</div>
+</div>
 
-# --- ROUTES (Маршруты) ---
+<div id="box" onclick="blurInput()"></div>
 
-@app.route('/')
-def home(): return render_template('index.html')
+<div class="inp">
+    <div class="btn" id="plus">+</div>
+    <div class="txt-div" id="txt" contenteditable="true" data-placeholder="Message..."></div>
+    <div class="btn send" onclick="send()">↑</div>
+</div>
 
-@app.route('/verify', methods=['POST'])
-def verify():
-    return jsonify({"ok": safe_eq(request.json.get("k"), ACCESS_KEY)})
+<div id="plusMenu">
+    <div onclick="triggerFile()">📷 Upload Photo</div>
+    <div onclick="addNote()">📝 Add Note</div>
+</div>
 
-@app.route('/history', methods=['POST'])
-def history():
-    uid = request.json.get("uid")
-    user = db[uid]
-    # Добавляем ID сообщениям, если их нет (для корректной работы редактирования)
-    for m in user["history"]:
-        if "id" not in m: m["id"] = "m"+str(int(time.time()*1000))
-    return jsonify({"history": user["history"], "pro": safe_eq(request.json.get("k"), ACCESS_KEY)})
+<div id="mod">
+    <div class="win">
+        <h3>UNLOCK PRO</h3>
+        <div id="auth-area"></div>
+        <p onclick="closeAuth()" style="margin-top:20px;color:#888;font-size:12px;cursor:pointer;">Close</p>
+    </div>
+</div>
 
-@app.route('/edit', methods=['POST'])
-def edit_msg():
-    d = request.json
-    uid, mid, new_text = d.get("uid"), d.get("mid"), d.get("new_text")
-    user = db[uid]
-    for m in user["history"]:
-        if m.get("id") == mid: m["c"] = new_text
-    save_db()
-    return jsonify({"ok": True})
+<script>
+const b=document.getElementById('box'), t=document.getElementById('txt'), uid=localStorage.getItem('uid')||'u'+Date.now();
+localStorage.setItem('uid',uid);
 
-@app.route('/delete', methods=['POST'])
-def delete_msg():
-    d = request.json
-    uid, mid = d.get("uid"), d.get("mid")
-    user = db[uid]
-    user["history"] = [m for m in user["history"] if m.get("id") != mid]
-    save_db()
-    return jsonify({"ok": True})
+function blurInput(){ t.blur(); }
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    d = request.json
-    msg, uid, key, img = d.get("msg"), d.get("uid"), d.get("k"), d.get("img")
-    paid = safe_eq(key, ACCESS_KEY)
-    user = db[uid]
-
-    # Лимит для бесплатных пользователей
-    if not paid and user["count_free"] >= FREE_MSG_LIMIT:
-        return jsonify({"reply":"Free 10 messages used. Please unlock access.","pro":paid})
-
-    # Стартовый триггер системы
-    if msg == "SYSTEM_INIT_TRIGGER":
-        return jsonify({"reply":"I'm your coach. What is your goal?","pro":paid})
-
-    # Пошаговый онбординг (HOOK -> BASE -> DONE)
-    if user["step"] == "HOOK":
-        user["profile"]["goal"] = msg
-        user["profile"]["vibe"] = detect_vibe(msg)
-        user["step"] = "BASE"
-        reply = "Got it. Height/Weight?"
-    elif user["step"] == "BASE":
-        user["profile"]["stats"] = msg
-        user["step"] = "DONE"
-        reply = "Locked. How do you train?"
-    else:
-        # Основной чат с использованием контекста последних 6 сообщений
-        context = [{"role":"user" if m["r"]=="usr" else "assistant","content":m["c"]} for m in user["history"][-6:]]
-        msgs = [{"role":"system","content":get_sys(user["profile"])}] + context + [{"role":"user","content":msg}]
-        try:
-            if img:
-                if not paid:
-                    reply = "Photos are Premium."
-                else:
-                    msgs.append({"role":"user","content":[{"type":"text","text":"Analyze"},{"type":"image_url","image_url":{"url":img}}]})
-                    r = client.chat.completions.create(model="gpt-4o-mini", messages=msgs)
-                    reply = r.choices[0].message.content
-            else:
-                r = client.chat.completions.create(model="gpt-4o-mini", messages=msgs)
-                reply = r.choices[0].message.content
-        except:
-            reply = "AI Offline"
-
-    # Сохранение сообщений в историю
-    new_mid_user = "m"+str(int(time.time()*1000))
-    new_mid_bot = "m"+str(int(time.time()*1000)+1)
-    user["history"].append({"r":"usr","c":msg,"id":new_mid_user})
-    user["history"].append({"r":"bot","c":reply,"id":new_mid_bot})
+function add(msg,role,img,mid=null){
+    let d=document.createElement('div');d.className='msg '+role;d.dataset.mid=mid||('m'+Date.now());
+    if(img)d.innerHTML=`<img src="${img}"><br>`+(msg||'Analyzing...');
+    else d.innerHTML=role=='usr'?msg.replace(/\n/g,'<br>'):marked.parse(msg);
     
-    # Счётчик сообщений
-    if not paid:
-        user["count_free"] += 1
-    else:
-        user["count"] += 1
-        
-    # Удаление старых сообщений из истории
-    if len(user["history"]) > MAX_HISTORY:
-        user["history"] = user["history"][-MAX_HISTORY:]
+    if(role=='usr'){ 
+      let c=document.createElement('span');c.className='msg-controls';c.innerText='✎';
+      c.onclick=(e)=>{e.stopPropagation();edit(d.dataset.mid,msg);};
+      d.appendChild(c);
+    }
+    b.appendChild(d);
+    // Плавный скролл вниз
+    b.scrollTo({ top: b.scrollHeight, behavior: 'smooth' });
+}
 
-    save_db()
-    return jsonify({"reply": reply, "pro": paid})
+function edit(mid,txt){
+    let n=prompt("Edit message:",txt);
+    if(n!==null && n!==txt){ 
+      let ep=n===""?'/delete':'/edit'; 
+      let body=n===""?{uid,mid}:{uid,mid,new_text:n};
+      fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+      .then(r=>r.json()).then(d=>{if(d.ok)location.reload();});
+    }
+}
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT",5000)))
+function post(txt,img){
+    txt=txt||t.innerText.trim();
+    if(!txt&&!img)return;
+    if(!img){add(txt,'usr');t.innerText='';}else add("Analyzing...",'usr',img);
+    
+    fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:txt,img,uid,k:localStorage.getItem('key')})})
+    .then(r=>r.json()).then(d=>{
+      if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";} 
+      add(d.reply,'bot');
+    })
+    .catch(()=>add("Error connecting",'bot'));
+}
+
+function send(){post();}
+
+// Обработка Enter (без Shift)
+t.addEventListener('keydown',(e)=>{
+  if(e.key==='Enter' && !e.shiftKey){
+    e.preventDefault();
+    send();
+  }
+});
+
+t.addEventListener('paste',(e)=>{
+  e.preventDefault();
+  let text = (e.clipboardData || window.clipboardData).getData('text');
+  document.execCommand('insertText', false, text);
+});
+
+function showAuth(){
+    document.getElementById('mod').style.display='flex';
+    document.getElementById('auth-area').innerHTML=`<input type="text" id="key" placeholder="ENTER KEY" style="width:100%;margin:15px 0;padding:12px;border:1px solid #ddd;border-radius:10px;text-align:center;font-size:16px;"><div class="btn send" style="width:100%;border-radius:15px;height:44px;" onclick="checkKey()">GO</div>`;
+    document.getElementById('key').focus();
+}
+
+function closeAuth(){ document.getElementById('mod').style.display='none'; document.getElementById('auth-area').innerHTML=''; }
+
+function checkKey(){ 
+    let k=document.getElementById('key').value.trim(); 
+    fetch('/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({k})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){localStorage.setItem('key',k);location.reload();}
+      else alert('Invalid key');
+    }); 
+}
+
+function triggerFile(){ 
+    let f=document.createElement('input');f.type='file';f.accept='image/*'; 
+    f.onchange=e=>{
+        let r=new FileReader();
+        r.onload=ev=>{
+            let i=new Image();i.src=ev.target.result;
+            i.onload=()=>{
+                let c=document.createElement('canvas');let x=c.getContext('2d');
+                let w=i.width,h=i.height,m=800;if(w>m){h*=m/w;w=m;}
+                c.width=w;c.height=h;x.drawImage(i,0,0,w,h);
+                post(null,c.toDataURL('image/jpeg',0.8));
+                document.getElementById('plusMenu').style.display='none';
+            };
+        };r.readAsDataURL(f.files[0]);
+    };f.click();
+}
+
+function addNote(){ 
+  let n=prompt("Note:");
+  if(n) { post(n); document.getElementById('plusMenu').style.display='none'; }
+}
+
+const plus=document.getElementById('plus'); 
+const plusMenu=document.getElementById('plusMenu');
+
+plus.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    plusMenu.style.display = plusMenu.style.display==='flex' ? 'none' : 'flex'; 
+});
+
+document.addEventListener('click',()=>{ plusMenu.style.display='none'; });
+
+// Загрузка истории
+fetch('/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:uid,k:localStorage.getItem('key')})})
+.then(r=>r.json()).then(d=>{
+    if(d.history&&d.history.length>0) d.history.forEach(m=>add(m.c,m.r,null,m.id));
+    else post("SYSTEM_INIT_TRIGGER");
+    if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";}
+});
+</script>
+</body>
+</html>
