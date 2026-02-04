@@ -9,29 +9,23 @@
 <title>Coach V77</title>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
-:root {
-    --bg: #fff;
-    --text: #111;
-    --acc: #2563eb;
-    --bub: #f3f4f6;
-    --usr: #2563eb;
-}
+:root { --bg:#fff; --text:#111; --acc:#2563eb; --bub:#f3f4f6; --usr:#2563eb; }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 body{font-family:-apple-system,sans-serif;background:var(--bg);color:var(--text);height:100dvh;margin:0;display:flex;flex-direction:column;overflow:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
 .head{position:fixed;top:0;left:0;width:100%;height:50px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between;padding:0 15px;padding-top:max(10px,env(safe-area-inset-top));background:rgba(255,255,255,0.95);z-index:99;}
 .logo{font-weight:700;font-size:14px;letter-spacing:1px;color:#888;}
-.badge{font-size:10px;border:1px solid #ddd;padding:3px 8px;border-radius:20px;color:#888;cursor:pointer;transition: all 0.3s;}
-.badge.pro{background:var(--acc);color:white;border:none;transform: scale(1);animation: pop 0.3s ease-out;}
-@keyframes pop { 0% { transform: scale(0.7);} 100% { transform: scale(1);} }
+.logo span{color:green;font-size:10px;margin-left:5px;}
+.badge{font-size:10px;border:1px solid #ddd;padding:3px 8px;border-radius:20px;color:#888;cursor:pointer;}
+.badge.pro{background:var(--acc);color:white;border:none;}
 #box{flex:1;overflow-y:auto;padding:60px 15px 80px;display:flex;flex-direction:column;gap:12px;}
-.msg{max-width:85%;padding:10px 16px;border-radius:18px;font-size:16px;line-height:1.4;word-wrap:break-word;animation: fadeUp 0.2s ease-out;position:relative;box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+.msg{max-width:85%;padding:10px 16px;border-radius:18px;font-size:16px;line-height:1.4;word-wrap:break-word;animation:fadeUp 0.2s ease-out;position:relative;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
 .bot{background:var(--bub);align-self:flex-start;border-bottom-left-radius:4px;color:#000;}
 .usr{background:var(--usr);color:white;align-self:flex-end;border-bottom-right-radius:4px;}
-.msg img{max-width:100%;border-radius:10px;margin-top:5px;box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+.msg img{max-width:100%;border-radius:10px;margin-top:5px;}
 .msg-controls{font-size:12px;margin-left:8px;cursor:pointer;opacity:0.6;}
 .inp{position:fixed;bottom:0;left:0;width:100%;background:#fff;padding:10px 15px;padding-bottom:max(10px,env(safe-area-inset-bottom));border-top:1px solid #eee;display:flex;gap:10px;z-index:99;align-items:flex-end;}
-.txt-div{flex:1;padding:10px 14px;border-radius:20px;border:1px solid #ddd;font-size:16px;outline:none;max-height:120px;overflow-y:auto;min-height:42px;background:#fff;caret-color: var(--acc);transition: border 0.25s;}
+.txt-div{flex:1;padding:10px 14px;border-radius:20px;border:1px solid #ddd;font-size:16px;outline:none;max-height:120px;overflow-y:auto;min-height:42px;background:#fff;caret-color:var(--acc);}
 .txt-div:empty:before{content:attr(data-placeholder);color:#9ca3af;}
 .txt-div:focus{border-color:#999;}
 .btn{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:none;font-size:24px;cursor:pointer;color:#555;flex-shrink:0;background:#f3f4f6;transition:all 0.25s;}
@@ -39,26 +33,27 @@ body{font-family:-apple-system,sans-serif;background:var(--bg);color:var(--text)
 .btn:active{transform:scale(0.95);}
 .send{background:var(--acc);color:white;}
 #plusMenu{position:absolute;bottom:60px;right:15px;background:white;border:1px solid #ddd;border-radius:15px;display:none;flex-direction:column;gap:5px;padding:10px;box-shadow:0 4px 14px rgba(0,0,0,0.15);transition:all 0.2s ease-in-out;}
-#plusMenu div{cursor:pointer;padding:10px 14px;border-radius:12px;transition: background 0.15s;}
+#plusMenu div{cursor:pointer;padding:10px 14px;border-radius:12px;transition:background 0.15s;}
 #plusMenu div:hover{background:var(--bub);}
 #mod{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(3px);}
 .win{background:white;padding:30px;border-radius:20px;width:80%;max-width:300px;text-align:center;}
-.typing{font-style:italic;color:#666;margin-left:10px;font-size:14px;}
+.date-separator{text-align:center;color:#aaa;font-size:12px;margin:10px 0;}
+.typing{font-style:italic;color:#666;}
 </style>
 </head>
 <body>
 
 <div class="head">
-    <div class="logo">COACH V77</div>
+    <div class="logo">COACH V77 <span>● Online</span></div>
     <div id="sts" class="badge" onclick="showAuth()">ACCESS</div>
 </div>
 
 <div id="box" onclick="blurInput()"></div>
 
 <div class="inp">
-    <div class="btn" id="plus" title="Add options">+</div>
+    <div class="btn" id="plus">+</div>
     <div class="txt-div" id="txt" contenteditable="true" data-placeholder="Message..."></div>
-    <div class="btn send" onclick="send()" title="Send message">↑</div>
+    <div class="btn send" onclick="send()">↑</div>
 </div>
 
 <div id="plusMenu">
@@ -70,7 +65,7 @@ body{font-family:-apple-system,sans-serif;background:var(--bg);color:var(--text)
     <div class="win">
         <h3>UNLOCK</h3>
         <div id="auth-area"></div>
-        <p onclick="closeAuth()" style="margin-top:20px;color:#888;font-size:12px;cursor:pointer;">Close</p>
+        <p onclick="closeAuth()" style="margin-top:20px;color:#888;font-size:12px;">Close</p>
     </div>
 </div>
 
@@ -80,60 +75,47 @@ localStorage.setItem('uid',uid);
 
 function blurInput(){ t.blur(); }
 
-function add(msg,role,img,mid=null,typing=false){
+function add(msg,role,img,mid=null){
     let d=document.createElement('div');d.className='msg '+role;d.dataset.mid=mid||('m'+Date.now());
-    if(typing)d.innerHTML='<span class="typing">Coach is typing...</span>';
-    else if(img)d.innerHTML=`<img src="${img}"><br>`+(msg||'Analyzing...');
-    else d.innerHTML=role=='usr'?msg.replace(/\n/g,'<br>'):marked.parse(msg);
     
-    if(role=='usr'){ 
-        let c=document.createElement('span');c.className='msg-controls';c.innerText='✎';
-        c.onclick=(e)=>{e.stopPropagation();edit(d.dataset.mid,msg);};
-        d.appendChild(c);
+    // Typing animation logic for bot
+    if(role=='bot' && !img){
+        d.innerHTML = '<span class="typing">Тренер печатает...</span>';
+        b.appendChild(d); b.scrollTop=b.scrollHeight;
+        setTimeout(()=>{
+            d.innerHTML = marked.parse(msg);
+            b.scrollTop=b.scrollHeight;
+        }, Math.random()*700+500); // Random delay 0.5s - 1.2s
+    } else if(img) {
+        d.innerHTML=`<img src="${img}"><br>`+(msg||'Analyzing...');
+        b.appendChild(d);
+    } else {
+        d.innerHTML=role=='usr'?msg.replace(/\n/g,'<br>'):marked.parse(msg);
+        b.appendChild(d);
     }
-    b.appendChild(d);b.scrollTop=b.scrollHeight;
-    return d;
+
+    if(role=='usr'){ let c=document.createElement('span');c.className='msg-controls';c.innerText='✎';c.onclick=(e)=>{e.stopPropagation();edit(d.dataset.mid,msg);};d.appendChild(c);}
+    b.scrollTop=b.scrollHeight;
 }
 
 function edit(mid,txt){
     let n=prompt("Edit:",txt);
-    if(n!==null && n!==txt){ 
-        let ep=n===""?'/delete':'/edit'; 
-        let body=n===""?{uid,mid}:{uid,mid,new_text:n};
-        fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
-        .then(r=>r.json()).then(d=>{if(d.ok)location.reload();});
-    }
+    if(n!==null && n!==txt){ let ep=n===""?'/delete':'/edit'; let body=n===""?{uid,mid}:{uid,mid,new_text:n};
+    fetch(ep,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).then(d=>{if(d.ok)location.reload();});}
 }
 
-async function post(txt,img){
-    txt=txt||t.innerText.trim();
-    if(!txt&&!img) return;
-    
-    if(!img){ add(txt,'usr'); t.innerText=''; } 
-    else { add("Analyzing...",'usr',img); }
-
-    // Show typing indicator
-    let typingDiv = add('', 'bot', null, null, true);
-
-    try{
-        let res = await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:txt,img,uid,k:localStorage.getItem('key')})});
-        let d = await res.json();
-        
-        // Remove typing indicator and show real message
-        typingDiv.remove();
-        
-        if(d.pro){
-            document.getElementById('sts').innerText="PRO";
-            document.getElementById('sts').className="badge pro";
-        }
+function post(txt,img){
+    txt=txt||t.innerText.trim();if(!txt&&!img)return;if(!img){add(txt,'usr');t.innerText='';}else add("Analyzing...",'usr',img);
+    fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:txt,img,uid,k:localStorage.getItem('key')})})
+    .then(r=>r.json()).then(d=>{
+        if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";}
         add(d.reply,'bot');
-    } catch {
-        typingDiv.remove();
-        add("Error connecting",'bot');
-    }
+        // Sound effect
+        new Audio('https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg').play().catch(()=>{}); 
+    })
+    .catch(()=>add("Error connecting",'bot'));
 }
-
-function send(){ post(); }
+function send(){post();}
 
 t.addEventListener('keydown',(e)=>{if(e.key==='Enter'){if(e.shiftKey)return;e.preventDefault();send();}});
 t.addEventListener('paste',(e)=>{e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||e.originalEvent.clipboardData).getData('text/plain'));});
@@ -153,12 +135,7 @@ const plus=document.getElementById('plus'); const plusMenu=document.getElementBy
 plus.addEventListener('click',()=>{ plusMenu.style.display=plusMenu.style.display==='flex'?'none':'flex'; });
 document.addEventListener('click',(e)=>{ if(!plus.contains(e.target)&&!plusMenu.contains(e.target)) plusMenu.style.display='none'; });
 
-// Initial History Load
-fetch('/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:uid,k:localStorage.getItem('key')})}).then(r=>r.json()).then(d=>{
-    if(d.history&&d.history.length>0) d.history.forEach(m=>add(m.c,m.r,null,m.id));
-    else post("SYSTEM_INIT_TRIGGER");
-    if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";}
-});
+fetch('/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:uid,k:localStorage.getItem('key')})}).then(r=>r.json()).then(d=>{if(d.history&&d.history.length>0)d.history.forEach(m=>add(m.c,m.r,null,m.id));else post("SYSTEM_INIT_TRIGGER");if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";}});
 </script>
 </body>
 </html>
