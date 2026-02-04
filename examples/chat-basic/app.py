@@ -40,12 +40,11 @@ if OPENAI_API_KEY:
         print("❌ OpenAI Client Failed to Init")
 
 # --- ECONOMY & MODELS ---
-# Using 4o as the "Premium" and 4o-mini as "Free"
-MODEL_FREE = "gpt-5-mini"
-MODEL_PAID = "gpt-5-mini" 
+MODEL_FREE = "gpt-4o-mini"
+MODEL_PAID = "gpt-4o" 
 
-HARD_LIMIT_FREE_TOTAL = 10 # ⛔ Lifetime limit for free users
-HARD_LIMIT_PAID_DAILY = 10 # ⛔ Daily limit for paid users
+HARD_LIMIT_FREE_TOTAL = 10 
+HARD_LIMIT_PAID_DAILY = 10 
 
 # --- SYSTEM SETTINGS ---
 PHOTO_UNLOCK_DAYS = 7 
@@ -99,8 +98,8 @@ class DataManager:
     def _default_schema(self):
         return {
             'joined_at': time.time(), 
-            'count': 0,       # Daily count for paid
-            'count_free': 0,  # Lifetime count for free
+            'count': 0,       
+            'count_free': 0,  
             'last_reset': time.time(),
             'history': [], 
             'onboarding_step': 'HOOK', 
@@ -340,6 +339,7 @@ HTML_PAGE = """
     </script>
 </body>
 </html>
+"""
 
 @app.route('/')
 def home(): return render_template_string(HTML_PAGE)
@@ -378,7 +378,7 @@ def chat():
         # FREE TIER: Lifetime Limit
         user_free_count = user.get('count_free', 0)
         if user_free_count >= HARD_LIMIT_FREE_TOTAL:
-            return jsonify({"reply": "💬 Бесплатный осмотр окончен. Чтобы тренироваться дальше, нужен доступ.", "type": "sys-event"}) # sys-event style
+            return jsonify({"reply": "💬 Бесплатный осмотр окончен. Чтобы тренироваться дальше, нужен доступ.", "type": "sys-event"}) 
         
     else:
         # PAID TIER: Daily Limit
@@ -445,7 +445,7 @@ def chat():
             db.save_user(user_id, user)
 
     # CHAT GENERATION
-    user['count'] += 1 # Increment daily count (even for free, tracked but limited elsewhere)
+    user['count'] += 1 
     
     sys_prompt = get_system_prompt(user['profile'], msg)
     messages = [{"role": "system", "content": sys_prompt}]
@@ -470,7 +470,7 @@ def chat():
         if not is_paid:
             user['count_free'] = user.get('count_free', 0) + 1
         else:
-            # Already incremented user['count'] above, but let's be safe
+            # Already incremented user['count'] above
             pass
         
         db.save_user(user_id, user)
