@@ -40,8 +40,8 @@ if OPENAI_API_KEY:
         print("❌ OpenAI Client Failed to Init")
 
 # --- ECONOMY & MODELS ---
-MODEL_FREE = "gpt-4o-mini"
-MODEL_PAID = "gpt-4o" 
+MODEL_FREE = "gpt-5-mini"
+MODEL_PAID = "gpt-5-mini" 
 
 HARD_LIMIT_FREE_TOTAL = 10 
 HARD_LIMIT_PAID_DAILY = 10 
