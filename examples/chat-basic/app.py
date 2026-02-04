@@ -9,40 +9,42 @@ from collections import defaultdict
 from openai import OpenAI
 
 # --- CONFIG ---
-# ACCESS_KEY используется для проверки PRO-статуса. По умолчанию: START-2026
-ACCESS_KEY = os.environ.get("ACCESS_KEY", "START-2026")
+DEFAULT_KEY = "START-2026"
+ACCESS_KEY = os.environ.get("ACCESS_KEY", DEFAULT_KEY)
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-MAX_HISTORY = 50
-FREE_MSG_LIMIT = 10
 
 client = None
 if OPENAI_API_KEY:
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
     except Exception as e:
-        print("OpenAI init error:", e)
+        print(f"OpenAI init error: {e}")
+
+MODEL_FREE = "gpt-5-mini"
+MODEL_PAID = "gpt-5-mini"
+BACKUP_FILE = "backup_db.json"
+MAX_HISTORY = 50
 
 app = Flask(__name__, template_folder='templates')
 
 # ==========================================
-# 🛠️ DATA MANAGEMENT (Управление данными)
+# 🛠️ DATA MANAGEMENT
 # ==========================================
 class DataManager:
     def __init__(self):
         self.local = defaultdict(lambda: self._schema())
         self.lock = threading.Lock()
-        self.backup_file = "backup_db.json"
         self._load()
 
     def _schema(self):
-        return {'history': [], 'count_free': 0, 'count_paid': 0, 'profile': {'vibe':'MENTOR'}, 'step':'HOOK'}
+        return {'history': [], 'step': 'HOOK', 'profile': {'vibe': 'MENTOR'}, 'count_free': 0, 'count': 0, 'last': time.time()}
 
     def _load(self):
-        if os.path.exists(self.backup_file):
+        if os.path.exists(BACKUP_FILE):
             try:
-                with open(self.backup_file) as f:
+                with open(BACKUP_FILE) as f:
                     d = json.load(f)
-                    for k,v in d.items():
+                    for k, v in d.items():
                         self.local[k] = v
             except: pass
 
@@ -50,7 +52,7 @@ class DataManager:
         def task():
             with self.lock:
                 try:
-                    with open(self.backup_file,'w') as f:
+                    with open(BACKUP_FILE, 'w') as f:
                         json.dump(self.local, f)
                 except: pass
         threading.Thread(target=task).start()
@@ -66,10 +68,6 @@ class DataManager:
 
 db = DataManager()
 
-def safe_eq(a, b):
-    if not a or not b: return False
-    return hmac.compare_digest(a.encode('utf-8'), b.encode('utf-8'))
-
 def detect_vibe(text):
     t = text.lower()
     if any(w in t for w in ['aesthetic','david','laid']):
@@ -81,14 +79,20 @@ def detect_vibe(text):
 def get_sys(profile):
     vibe = profile.get('vibe','MENTOR')
     guide = "Be calm."
-    if vibe == "AESTHETIC":
+    if vibe=="AESTHETIC":
         guide = "Focus on symmetry, aesthetics, discipline. Cold tone."
-    elif vibe == "POWER":
+    elif vibe=="POWER":
         guide = "Focus on strength, load, eating. Heavy tone."
-    return f"Role: Personal Coach. Vibe: {vibe}. Guide: {guide}. Rules: Human tone. Short answers. No fluff."
+    return f"""Role: Personal Coach. Vibe: {vibe}. Guide: {guide}. 
+Context: {profile.get('goal','New client')}. 
+Rules: Human tone. Short answers. No fluff."""
+
+def safe_str_eq(a, b):
+    if not a or not b: return False
+    return hmac.compare_digest(a.encode('utf-8'), b.encode('utf-8'))
 
 # ==========================================
-# 🖥️ ROUTES (Маршруты)
+# 🖥️ ROUTES
 # ==========================================
 @app.route('/')
 def home():
@@ -96,7 +100,7 @@ def home():
 
 @app.route('/verify', methods=['POST'])
 def verify():
-    return jsonify({"ok": safe_eq(request.json.get('k'), ACCESS_KEY)})
+    return jsonify({"ok": safe_str_eq(request.json.get('k'), ACCESS_KEY)})
 
 @app.route('/edit', methods=['POST'])
 def edit_msg():
@@ -104,7 +108,7 @@ def edit_msg():
     uid, mid, new_text = data.get('uid'), data.get('mid'), data.get('new_text')
     user = db.get(uid)
     for m in user['history']:
-        if m.get('id') == mid:
+        if m.get('id') == mid or m.get('id')==str(mid):
             m['c'] = new_text
             break
     db.set(uid, user)
@@ -115,93 +119,80 @@ def delete_msg():
     data = request.json
     uid, mid = data.get('uid'), data.get('mid')
     user = db.get(uid)
-    user['history'] = [m for m in user['history'] if m.get('id') != mid]
+    user['history'] = [m for m in user['history'] if m.get('id') != mid and m.get('id')!=str(mid)]
     db.set(uid, user)
     return jsonify({"ok": True})
 
 @app.route('/history', methods=['POST'])
 def history():
     d = request.json
-    uid, key = d.get('uid'), d.get('k')
+    uid,key = d.get('uid'), d.get('k')
     user = db.get(uid)
-    is_paid = safe_eq(key, ACCESS_KEY)
-    # Генерация ID для старых сообщений, если их нет
+    # Ensure IDs exist
     for m in user['history']:
-        if 'id' not in m: 
-            m['id'] = 'm' + str(int(time.time()*1000) + random.randint(0,999))
+        if 'id' not in m:
+            m['id'] = 'm'+str(int(time.time()*1000)+random.randint(0,999))
+    is_paid = safe_str_eq(key, ACCESS_KEY)
     return jsonify({"history": user['history'], "pro": is_paid})
 
 @app.route('/chat', methods=['POST'])
 def chat():
     d = request.json
     msg, img, uid, key = d.get('msg'), d.get('img'), d.get('uid'), d.get('k')
-    paid = safe_eq(key, ACCESS_KEY)
+    paid = safe_str_eq(key, ACCESS_KEY)
     user = db.get(uid)
 
-    if msg == "SYSTEM_INIT_TRIGGER":
-        return jsonify({"reply": "I'm your coach. What is your goal?", "pro": paid})
+    # Free 10 messages limit
+    if not paid and user['count_free'] >= 10:
+        return jsonify({"reply":"Your 10 free messages limit reached.","pro":paid})
 
-    if not paid and user['count_free'] >= FREE_MSG_LIMIT:
-        return jsonify({"reply": "Free limit reached. Please unlock PRO.", "pro": paid})
-
-    reply = "..."
+    reply="..."
     if not client:
-        reply = "AI Offline (check API key)"
+        reply="AI Offline (Check API Key)"
     else:
         try:
             sys_p = get_sys(user['profile'])
-            msgs = [{"role": "system", "content": sys_p}]
+            msgs=[{"role":"system","content":sys_p}]
             
-            # Добавление контекста (последние 6 сообщений)
-            for m in user['history'][-6:]:
-                role = 'user' if m['r'] == 'usr' else 'assistant'
-                msgs.append({'role': role, 'content': m['c']})
-
             if img:
-                if not paid: 
-                    reply = "Photos are Premium."
-                else:
-                    msgs.append({
-                        "role": "user", 
-                        "content": [
-                            {"type": "text", "text": "Analyze this image for my fitness goals."},
-                            {"type": "image_url", "image_url": {"url": img}}
-                        ]
-                    })
-                    r = client.chat.completions.create(model="gpt-4o-mini", messages=msgs)
-                    reply = r.choices[0].message.content
+                msgs.append({"role":"user","content":[{"type":"text","text":"Analyze"},{"type":"image_url","image_url":{"url":img}}]})
+                r = client.chat.completions.create(model=MODEL_FREE, messages=msgs)
+                reply = r.choices[0].message.content
             else:
-                if user['step'] == 'HOOK':
+                # Onboarding
+                if user['step']=='HOOK':
                     user['profile']['goal'] = msg
                     user['profile']['vibe'] = detect_vibe(msg)
                     user['step'] = 'BASE'
                     reply = "Got it. Height/Weight?"
-                elif user['step'] == 'BASE':
+                elif user['step']=='BASE':
                     user['profile']['stats'] = msg
                     user['step'] = 'DONE'
                     reply = "Locked. How do you train?"
                 else:
-                    msgs.append({"role": "user", "content": msg})
-                    # Используем доступную модель gpt-4o-mini
-                    r = client.chat.completions.create(model="gpt-4o-mini", messages=msgs)
+                    # Last 6 messages context
+                    context_msgs=[]
+                    for m in user['history'][-6:]:
+                        role='user' if m['r']=='usr' else 'assistant'
+                        context_msgs.append({'role':role,'content':m['c']})
+                    context_msgs.append({"role":"user","content":msg})
+                    r = client.chat.completions.create(model=MODEL_FREE, messages=[{"role":"system","content":sys_p}]+context_msgs)
                     reply = r.choices[0].message.content
         except Exception as e:
-            print("Error:", e)
+            print(f"Error: {e}")
             reply = "Error generating response."
 
-    # Сохранение в историю с уникальными ID
-    new_mid_user = 'm' + str(int(time.time()*1000))
-    new_mid_bot = 'm' + str(int(time.time()*1000) + 1)
-    user['history'].append({'r': 'usr', 'c': msg or '[IMG]', 'id': new_mid_user})
-    user['history'].append({'r': 'bot', 'c': reply, 'id': new_mid_bot})
+    # Save history with IDs
+    new_mid_user = 'm'+str(int(time.time()*1000))
+    new_mid_bot = 'm'+str(int(time.time()*1000)+1)
+    user['history'].append({'r':'usr','c':msg or '[IMG]','id':new_mid_user})
+    user['history'].append({'r':'bot','c':reply,'id':new_mid_bot})
 
-    if paid: 
-        user['count_paid'] += 1
-    else: 
+    if not paid:
         user['count_free'] += 1
+    db.set(uid,user)
 
-    db.set(uid, user)
-    return jsonify({"reply": reply, "pro": paid})
+    return jsonify({"reply":reply,"pro":paid})
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+if __name__=='__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT",5000)))
