@@ -1,4 +1,4 @@
-import os, time, json, random, threading, hmac
+import os, time, json, random, hmac
 from flask import Flask, request, jsonify, render_template
 from collections import defaultdict
 from openai import OpenAI
@@ -11,7 +11,7 @@ client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 app = Flask(__name__, template_folder='templates')
 MAX_HISTORY = 50
 
-# База данных в памяти (сбрасывается при перезагрузке сервера)
+# Временная база данных (хранится, пока работает сервер)
 db = defaultdict(lambda: {"history":[],"step":"HOOK","profile":{"vibe":"MENTOR"},"count":0})
 
 def safe_eq(a,b):
@@ -33,17 +33,16 @@ def get_sys(profile):
 
 # --- МАРШРУТЫ ---
 @app.route('/')
-def home(): 
-    return render_template('index.html')
+def home(): return render_template('index.html')
 
 @app.route('/verify', methods=['POST'])
-def verify(): 
-    return jsonify({"ok": safe_eq(request.json.get("k"),ACCESS_KEY)})
+def verify(): return jsonify({"ok": safe_eq(request.json.get("k"),ACCESS_KEY)})
 
 @app.route('/history', methods=['POST'])
 def history():
     uid=request.json.get("uid")
     user=db[uid]
+    # Добавляем ID сообщениям, если их нет
     for m in user["history"]:
         if "id" not in m: m["id"]="m"+str(int(time.time()*1000)+random.randint(0,999))
     return jsonify({"history":user["history"],"pro":safe_eq(request.json.get("k"),ACCESS_KEY)})
@@ -56,27 +55,17 @@ def edit_msg():
         if m.get("id")==mid: m["c"]=new_text
     return jsonify({"ok":True})
 
-@app.route('/delete', methods=['POST'])
-def delete_msg():
-    d=request.json; uid, mid=d.get("uid"), d.get("mid")
-    user=db[uid]
-    user["history"] = [m for m in user["history"] if m.get("id")!=mid]
-    return jsonify({"ok":True})
-
 @app.route('/chat', methods=['POST'])
 def chat():
     d=request.json
-    msg, uid, key, img = d.get("msg"), d.get("uid"), d.get("k"), d.get("img")
-    paid = safe_eq(key,ACCESS_KEY)
+    msg, uid = d.get("msg"), d.get("uid")
+    paid = safe_eq(d.get("k"),ACCESS_KEY)
     user=db[uid]
 
     if msg=="SYSTEM_INIT_TRIGGER":
-        return jsonify({"reply":"I'm your coach. What is your goal?","pro":paid})
+        return jsonify({"reply":"I'm your coach. What is your goal?"})
 
-    # Ограничение бесплатного пользователя: 10 сообщений навсегда
-    if not paid and user["count"]>=10:
-        return jsonify({"reply":"Free limit reached. Access required.","pro":paid})
-
+    # Сценарий сбора данных пользователя
     if user["step"]=="HOOK":
         user["profile"]["goal"]=msg
         user["profile"]["vibe"]=detect_vibe(msg)
@@ -87,7 +76,7 @@ def chat():
         user["step"]="DONE"
         reply="Locked. How do you train?"
     else:
-        # Получаем контекст последних 6 сообщений
+        # Обычный чат с использованием контекста последних 6 сообщений
         context=[{"role":"user" if m["r"]=="usr" else "assistant","content":m["c"]} for m in user["history"][-6:]]
         msgs=[{"role":"system","content":get_sys(user["profile"])}]+context+[{"role":"user","content":msg}]
         try:
@@ -96,13 +85,11 @@ def chat():
         except:
             reply="AI Offline"
 
-    # Сохранение истории сообщений с ID для возможности редактирования
+    # Сохранение в историю
     user["history"].append({"r":"usr","c":msg,"id":"m"+str(int(time.time()*1000))})
     user["history"].append({"r":"bot","c":reply,"id":"m"+str(int(time.time()*1000)+1)})
 
-    if not paid: user["count"]+=1
     if len(user["history"])>MAX_HISTORY: user["history"]=user["history"][-MAX_HISTORY:]
-
     return jsonify({"reply":reply,"pro":paid})
 
 if __name__=="__main__":
