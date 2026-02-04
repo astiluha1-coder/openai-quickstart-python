@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify, render_template
 from collections import defaultdict
 from openai import OpenAI
 
-# --- CONFIG (Настройки) ---
+# --- CONFIG ---
 ACCESS_KEY = os.environ.get("ACCESS_KEY", "START-2026")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -13,53 +13,46 @@ MAX_HISTORY = 50
 FREE_MSG_LIMIT = 10
 BACKUP_FILE = "backup_db.json"
 
-# --- DATA MANAGEMENT (Работа с данными) ---
-# Используем defaultdict для автоматического создания профиля нового пользователя
+# --- DATA ---
 db = defaultdict(lambda: {"history": [], "step": "HOOK", "profile": {"vibe": "MENTOR"}, "count": 0, "count_free": 0})
 lock = threading.Lock()
 
-# Загрузка базы данных из файла при старте
+# Load backup
 if os.path.exists(BACKUP_FILE):
     try:
-        with open(BACKUP_FILE, "r") as f:
+        with open(BACKUP_FILE) as f:
             data = json.load(f)
             for k, v in data.items():
                 db[k] = v
-    except Exception as e:
-        print(f"Backup load error: {e}")
+    except: pass
 
 def save_backup():
-    """Фоновое сохранение базы данных в JSON файл"""
     def task():
         with lock:
             try:
                 with open(BACKUP_FILE, "w") as f:
                     json.dump(db, f)
-            except Exception as e:
-                print(f"Backup save error: {e}")
+            except: pass
     threading.Thread(target=task).start()
 
 def safe_eq(a, b):
-    """Безопасное сравнение ключей доступа"""
     if not a or not b: return False
     return hmac.compare_digest(a.encode(), b.encode())
 
 def detect_vibe(text):
-    """Определение стиля коуча на основе целей пользователя"""
     t = text.lower()
-    if any(w in t for w in ["aesthetic", "david", "laid"]): return "AESTHETIC"
-    if any(w in t for w in ["power", "squat", "bench"]): return "POWER"
+    if any(w in t for w in ["aesthetic","david","laid"]): return "AESTHETIC"
+    if any(w in t for w in ["power","squat","bench"]): return "POWER"
     return "MENTOR"
 
 def get_sys(profile):
-    """Генерация системного промпта для ИИ"""
-    vibe = profile.get("vibe", "MENTOR")
+    vibe = profile.get("vibe","MENTOR")
     guide = "Be calm."
-    if vibe == "AESTHETIC": guide = "Focus on symmetry, aesthetics, discipline. Cold tone."
-    elif vibe == "POWER": guide = "Focus on strength, load, eating. Heavy tone."
+    if vibe=="AESTHETIC": guide="Focus on symmetry, aesthetics, discipline. Cold tone."
+    elif vibe=="POWER": guide="Focus on strength, load, eating. Heavy tone."
     return f"Role: Personal Coach. Vibe: {vibe}. Guide: {guide}. Context: {profile.get('goal','New client')}. Rules: Human tone. Short answers."
 
-# --- ROUTES (Маршруты) ---
+# --- ROUTES ---
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -71,13 +64,11 @@ def verify():
 @app.route('/history', methods=['POST'])
 def history():
     uid = request.json.get("uid")
-    key = request.json.get("k")
     user = db[uid]
-    # Добавляем ID сообщениям, если их нет (для старых записей)
     for m in user["history"]:
         if "id" not in m:
             m["id"] = "m"+str(int(time.time()*1000)+random.randint(0,999))
-    return jsonify({"history": user["history"], "pro": safe_eq(key, ACCESS_KEY)})
+    return jsonify({"history": user["history"], "pro": safe_eq(request.json.get("k"), ACCESS_KEY)})
 
 @app.route('/edit', methods=['POST'])
 def edit_msg():
@@ -101,52 +92,51 @@ def delete_msg():
 @app.route('/chat', methods=['POST'])
 def chat():
     d = request.json
-    msg, uid, key = d.get("msg"), d.get("uid"), d.get("k")
-    paid = safe_eq(key, ACCESS_KEY)
+    msg, uid = d.get("msg"), d.get("uid")
+    paid = safe_eq(d.get("k"), ACCESS_KEY)
     user = db[uid]
 
-    # Лимит для бесплатных пользователей
+    # Free version: 10 messages total
     if not paid and user["count_free"] >= FREE_MSG_LIMIT:
         return jsonify({"reply": "Free limit reached. Access required.", "pro": False})
 
-    if msg == "SYSTEM_INIT_TRIGGER":
-        return jsonify({"reply": "I'm your coach. What is your goal?", "pro": paid})
+    # System init
+    if msg=="SYSTEM_INIT_TRIGGER":
+        return jsonify({"reply":"I'm your coach. What is your goal?", "pro": paid})
 
-    # Сценарий онбординга
-    if user["step"] == "HOOK":
+    # Onboarding
+    if user["step"]=="HOOK":
         user["profile"]["goal"] = msg
         user["profile"]["vibe"] = detect_vibe(msg)
         user["step"] = "BASE"
         reply = "Got it. Height/Weight?"
-    elif user["step"] == "BASE":
+    elif user["step"]=="BASE":
         user["profile"]["stats"] = msg
         user["step"] = "DONE"
         reply = "Locked. How do you train?"
     else:
-        # Основной цикл чата с контекстом
-        context = [{"role": "user" if m["r"] == "usr" else "assistant", "content": m["c"]} for m in user["history"][-6:]]
-        msgs = [{"role": "system", "content": get_sys(user["profile"])}] + context + [{"role": "user", "content": msg}]
+        # Build context
+        context = [{"role":"user" if m["r"]=="usr" else "assistant", "content":m["c"]} for m in user["history"][-6:]]
+        msgs = [{"role":"system", "content":get_sys(user["profile"])}] + context + [{"role":"user","content":msg}]
         try:
             if client:
-                r = client.chat.completions.create(model="gpt-4o-mini", messages=msgs)
+                r = client.chat.completions.create(model="gpt-5-mini", messages=msgs)
                 reply = r.choices[0].message.content
             else:
                 reply = "AI Offline"
-        except Exception as e:
-            print(f"AI Error: {e}")
+        except:
             reply = "Error generating response."
 
-    # Сохранение истории
+    # Append history
     new_mid_user = "m"+str(int(time.time()*1000))
     new_mid_bot = "m"+str(int(time.time()*1000)+1)
-    user["history"].append({"r": "usr", "c": msg, "id": new_mid_user})
-    user["history"].append({"r": "bot", "c": reply, "id": new_mid_bot})
+    user["history"].append({"r":"usr","c":msg,"id":new_mid_user})
+    user["history"].append({"r":"bot","c":reply,"id":new_mid_bot})
 
-    # Ограничение длины истории
-    if len(user["history"]) > MAX_HISTORY: 
-        user["history"] = user["history"][-MAX_HISTORY:]
+    # Limit history
+    if len(user["history"]) > MAX_HISTORY: user["history"] = user["history"][-MAX_HISTORY:]
 
-    # Учет сообщений
+    # Count messages
     if paid:
         user["count"] += 1
     else:
@@ -155,5 +145,5 @@ def chat():
     save_backup()
     return jsonify({"reply": reply, "pro": paid})
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+if __name__=="__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT",5000)))
