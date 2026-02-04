@@ -1,107 +1,57 @@
-// === ЭЛЕМЕНТЫ DOM ===
-const chatWindow = document.querySelector(".chat-window");
-const msgInput = document.getElementById("msgInput");
-const sendBtn = document.getElementById("sendBtn");
-const plusBtn = document.getElementById("plusBtn");
-const plusMenu = document.getElementById("plusMenu");
-const uploadPhotoBtn = document.getElementById("uploadPhoto");
-const addNoteBtn = document.getElementById("addNote");
+const plusBtn = document.getElementById('plusBtn');
+const plusMenu = document.getElementById('plusMenu');
+const exerciseMenu = document.getElementById('exerciseMenu');
+const chatWindow = document.querySelector('.chat-window');
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const app = document.getElementById('app');
+const closeBtn = document.getElementById('closeBtn');
 
-let uid = localStorage.getItem("uid") || ("u" + Date.now());
-localStorage.setItem("uid", uid);
+// Plus Menu toggle
+plusBtn.addEventListener('click', (e) => { e.stopPropagation(); plusMenu.classList.toggle('hidden'); });
+document.addEventListener('click', () => plusMenu.classList.add('hidden'));
 
-// === PLUS MENU ===
-plusBtn.onclick = (e) => {
-    e.stopPropagation();
-    plusMenu.classList.toggle("hidden");
-};
+// Fullscreen chat toggle
+plusBtn.addEventListener('dblclick', () => { app.classList.add('fullscreen'); closeBtn.classList.remove('hidden'); });
+closeBtn.addEventListener('click', () => { app.classList.remove('fullscreen'); closeBtn.classList.add('hidden'); });
 
-document.addEventListener('click', (e) => {
-    if (!plusMenu.contains(e.target) && e.target !== plusBtn) {
-        plusMenu.classList.add("hidden");
-    }
+// Exercise buttons
+exerciseMenu.addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    const text = btn.dataset.text;
+    addBotMessage(text);
 });
 
-// === ДОБАВЛЕНИЕ СООБЩЕНИЯ ===
-function addMessage(text, role = "bot", skeleton = false) {
-    const msgDiv = document.createElement("div");
-    msgDiv.className = role;
-    if (skeleton) {
-        msgDiv.classList.add("skeleton");
-        msgDiv.textContent = "";
-    } else {
-        msgDiv.textContent = text;
-    }
-    chatWindow.appendChild(msgDiv);
+// Send message
+sendBtn.addEventListener('click', sendUserMessage);
+userInput.addEventListener('keypress', (e) => { if(e.key==='Enter') sendUserMessage(); });
+
+function sendUserMessage() {
+    const text = userInput.value.trim(); if(!text) return;
+    addUserMessage(text); userInput.value='';
+    // AI request
+    fetch('/chat', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ msg:text, uid:'shopify-user', k:'ACCESS_KEY' })
+    })
+    .then(res=>res.json())
+    .then(data=>addBotMessage(data.reply))
+    .catch(()=>addBotMessage("AI Offline"));
+}
+
+function addBotMessage(text) {
+    const msg = document.createElement('div');
+    msg.classList.add('chat-message','bot');
+    msg.innerHTML = `<p>${text}</p>`;
+    chatWindow.appendChild(msg);
     chatWindow.scrollTop = chatWindow.scrollHeight;
-    return msgDiv;
 }
 
-// === ОТПРАВКА СООБЩЕНИЯ ===
-async function sendMessage() {
-    const msg = msgInput.value.trim();
-    if (!msg) return;
-    
-    // Закрываем меню если открыто
-    plusMenu.classList.add("hidden");
-    
-    addMessage(msg, "usr");
-    msgInput.value = "";
-    const skeletonDiv = addMessage("", "bot", true);
-
-    try {
-        const resp = await fetch("/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ uid, msg })
-        });
-        const data = await resp.json();
-        const text = data.reply || "No response";
-
-        // --- TYPING EFFECT ---
-        let reply = "";
-        skeletonDiv.classList.remove("skeleton");
-        
-        for (let i = 0; i < text.length; i++) {
-            reply += text[i];
-            skeletonDiv.textContent = reply;
-            chatWindow.scrollTop = chatWindow.scrollHeight; // Автопрокрутка
-            await new Promise(r => setTimeout(r, 15 + Math.random() * 20));
-        }
-
-    } catch (e) {
-        skeletonDiv.textContent = "Error sending message";
-        skeletonDiv.classList.remove("skeleton");
-        console.error(e);
-    }
-}
-
-sendBtn.onclick = sendMessage;
-msgInput.addEventListener("keypress", e => {
-    if (e.key === "Enter") sendMessage();
-});
-
-// === КНОПКИ ПЛЮС МЕНЮ ===
-uploadPhotoBtn.onclick = () => {
-    alert("Photo upload feature coming soon!");
-    plusMenu.classList.add("hidden");
-};
-addNoteBtn.onclick = () => {
-    let note = prompt("Enter note:");
-    if(note) {
-        msgInput.value = "[NOTE]: " + note;
-        sendMessage();
-    }
-    plusMenu.classList.add("hidden");
-};
-
-// === LOTTIE АНИМАЦИИ (Пример использования) ===
-function playExerciseLottie(container, file) {
-    lottie.loadAnimation({
-        container,
-        renderer: "svg",
-        loop: true,
-        autoplay: true,
-        path: `/static/lottie/${file}.json`
-    });
+function addUserMessage(text) {
+    const msg = document.createElement('div');
+    msg.classList.add('chat-message','usr');
+    msg.innerHTML = `<p>${text}</p>`;
+    chatWindow.appendChild(msg);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
 }
