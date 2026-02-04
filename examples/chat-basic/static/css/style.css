@@ -1,42 +1,77 @@
+/* Общие стили */
 body, html {
     margin: 0; padding: 0; height: 100%;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #f4f4f4;
+    background: transparent; /* Важно для iframe/widget */
     overflow: hidden;
 }
 
+/* Кнопка открытия (Bubble) */
+#chatBubble {
+    position: fixed;
+    bottom: 20px; right: 20px;
+    width: 60px; height: 60px;
+    background: #000; color: #fff;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999;
+    transition: transform 0.2s;
+}
+#chatBubble:active { transform: scale(0.9); }
+#chatBubble.hidden { display: none; }
+
+/* Основной контейнер (Fullscreen) */
+#app {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    width: 100vw; height: 100dvh;
+    background: #fff;
+    z-index: 10000;
+    display: flex; flex-direction: column;
+}
+#app.hidden { display: none; }
+
+/* Шапка */
 header.header {
     padding: env(safe-area-inset-top) 15px 10px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #fff;
-    position: sticky;
-    top: 0; z-index: 10;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+    display: flex; justify-content: space-between; align-items: center;
+    background: #fff; border-bottom: 1px solid #eee;
+    height: 60px; box-sizing: content-box;
 }
 
 header h1 { margin: 0; font-size: 1.5rem; }
 header .badge { background: #ff5a5f; color: #fff; padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; }
-#closeBtn { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; }
+#closeBtn { background: transparent; border: none; font-size: 1.5rem; cursor: pointer; padding: 0 10px; }
 
-#app.fullscreen { position: fixed; top:0; left:0; right:0; bottom:0; width:100vw; height:100dvh; background:#fff; z-index:10000; }
+/* Окно чата */
+.chat-window {
+    flex: 1;
+    padding: 15px;
+    padding-bottom: 20px;
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+    background: #f9f9f9;
+    -webkit-overflow-scrolling: touch;
+}
 
-.chat-window { padding: 15px; padding-bottom: calc(80px + env(safe-area-inset-bottom)); overflow-y: auto; height: calc(100vh - 70px); display:flex; flex-direction:column; gap:8px; -webkit-overflow-scrolling: touch; }
+/* Поле ввода */
+.input-area {
+    padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    background: #fff; border-top: 1px solid #eee;
+    display: flex; gap: 10px; align-items: center;
+}
 
-.input-area { position: fixed; bottom: 0; left: 0; width: 100%; display:flex; align-items:center; padding:10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); background:#fff; gap:5px; box-shadow: 0 -1px 5px rgba(0,0,0,0.1); z-index:20; }
-.input-area input { flex:1; padding:12px 15px; border-radius:20px; border:1px solid #ccc; font-size:16px; outline:none; }
-.input-area input:focus { border-color:#007bff; }
-.input-area button { padding:10px 15px; border:none; border-radius:50%; background:#007bff; color:#fff; font-size:1rem; cursor:pointer; display:flex; align-items:center; justify-content:center; transition: background 0.2s; }
-.input-area button:active { background:#0056b3; transform: scale(0.95); }
+.input-area input { flex: 1; padding: 12px 15px; border-radius: 20px; border: 1px solid #ccc; font-size: 16px; outline: none; }
+.input-area input:focus { border-color: #007bff; }
 
-#plusMenu { position:absolute; bottom: calc(60px + env(safe-area-inset-bottom)); left:10px; background:#fff; border:1px solid #ccc; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:10px; box-shadow:0 4px 15px rgba(0,0,0,0.15); z-index:10001; }
-#plusMenu button { display:flex; align-items:center; justify-content:center; background:#f8f9fa; color:#333; border-radius:12px; border:1px solid #eee; padding:10px; width:100%; font-size:14px; cursor:pointer; transition: background 0.2s; }
-#plusMenu button:hover { background:#e0e0e0; }
-#exerciseMenu { display:flex; flex-wrap:wrap; gap:10px; }
-#exerciseMenu button { flex:1 1 45%; padding:10px 15px; }
-.hidden { display:none; }
+.input-area button {
+    width: 40px; height: 40px; border: none; border-radius: 50%; background: #007bff;
+    color: #fff; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
 
-.bot, .usr { max-width:80%; padding:10px 15px; border-radius:15px; font-size:16px; line-height:1.4; }
-.bot { background:#e9ecef; align-self:flex-start; border-bottom-left-radius:4px; }
-.usr { background:#007bff; color:white; align-self:flex-end; border-bottom-right-radius:4px; }
+/* Сообщения */
+.bot, .usr { max-width: 80%; padding: 10px 15px; border-radius: 15px; font-size: 16px; line-height: 1.4; word-wrap: break-word; }
+.bot { background: #e5e5ea; align-self: flex-start; border-bottom-left-radius: 4px; color: #000; }
+.usr { background: #007bff; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
