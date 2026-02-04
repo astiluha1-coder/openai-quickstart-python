@@ -230,7 +230,7 @@ def get_system_prompt(profile, last_msg=""):
     """
 
 # ==========================================
-# 🎨 UI (IOS NATIVE FIX)
+# 🎨 UI (IOS NATIVE FIX V2)
 # ==========================================
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -253,7 +253,7 @@ HTML_PAGE = """
             background: var(--bg); color: var(--text-main); 
             height: 100%; 
             width: 100%;
-            position: fixed; /* Prevents scroll bounce and jumping */
+            position: fixed; 
             inset: 0;
             overflow: hidden;
             display: flex; flex-direction: column; 
