@@ -53,44 +53,13 @@ def safe_eq(a,b):
     if not a or not b: return False
     return hmac.compare_digest(a.encode(),b.encode())
 
-def detect_vibe(text):
-    t=text.lower()
-    if any(w in t for w in ["aesthetic","david","laid"]): return "AESTHETIC"
-    if any(w in t for w in ["power","squat","bench"]): return "POWER"
-    return "MENTOR"
-
 def get_sys(profile):
-    vibe=profile.get("vibe","MENTOR")
-    guide="Be calm."
-    if vibe=="AESTHETIC": guide="Focus on symmetry, aesthetics, discipline. Cold tone."
-    if vibe=="POWER": guide="Focus on strength, load, eating. Heavy tone."
-    return f"Role: Personal Coach. Vibe: {vibe}. Guide: {guide}. Context: {profile.get('goal','New client')}. Rules: Human tone. Short answers."
+    return f"Role: Personal Coach. Context: {profile.get('goal','New client')}. Rules: Short, motivating answers."
 
 # --- Routes ---
 @app.route('/')
 def home():
     return render_template('index.html')
-
-@app.route('/verify', methods=['POST'])
-def verify():
-    return jsonify({"ok": safe_eq(request.json.get("k"),ACCESS_KEY)})
-
-@app.route('/history', methods=['POST'])
-def history():
-    uid=request.json.get("uid")
-    user=db.get(uid)
-    for m in user["history"]:
-        if "id" not in m: m["id"]="m"+str(int(time.time()*1000)+random.randint(0,999))
-    return jsonify({"history":user["history"],"pro":safe_eq(request.json.get("k"),ACCESS_KEY)})
-
-@app.route('/edit', methods=['POST'])
-def edit_msg():
-    d=request.json; uid,mid,new_text=d.get("uid"),d.get("mid"),d.get("new_text")
-    user=db.get(uid)
-    for m in user["history"]:
-        if m.get("id")==mid: m["c"]=new_text
-    db.set(uid,user)
-    return jsonify({"ok":True})
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -99,33 +68,23 @@ def chat():
     paid = safe_eq(d.get("k"),ACCESS_KEY)
     user=db.get(uid)
 
-    if msg=="SYSTEM_INIT_TRIGGER":
-        return jsonify({"reply":"I'm your coach. What is your goal?","pro":paid})
-
-    # onboarding steps
+    # Basic Logic
     if user["step"]=="HOOK":
         user["profile"]["goal"]=msg
-        user["profile"]["vibe"]=detect_vibe(msg)
         user["step"]="BASE"
-        reply="Got it. Height/Weight?"
-    elif user["step"]=="BASE":
-        user["profile"]["stats"]=msg
-        user["step"]="DONE"
-        reply="Locked. How do you train?"
+        reply="Got it. What is your height and weight?"
     else:
         context=[{"role":"user" if m["r"]=="usr" else "assistant","content":m["c"]} for m in user["history"][-6:]]
         msgs=[{"role":"system","content":get_sys(user["profile"])}]+context+[{"role":"user","content":msg}]
         try:
             if client:
-                # Если gpt-5-mini еще недоступна, замените на gpt-4o-mini
-                r=client.chat.completions.create(model="gpt-5-mini",messages=msgs)
+                r=client.chat.completions.create(model="gpt-4o-mini",messages=msgs)
                 reply=r.choices[0].message.content
             else:
-                reply="AI Offline"
+                reply="AI Offline (Check API Key)"
         except:
             reply="Error generating response."
 
-    # Add skeleton-like message IDs
     user["history"].append({"r":"usr","c":msg,"id":"m"+str(int(time.time()*1000))})
     user["history"].append({"r":"bot","c":reply,"id":"m"+str(int(time.time()*1000)+1)})
     db.set(uid,user)
