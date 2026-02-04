@@ -21,8 +21,8 @@ if OPENAI_API_KEY:
     except:
         pass
 
-MODEL_FREE = "gpt-4o-mini"
-MODEL_PAID = "gpt-4o"
+MODEL_FREE = "gpt-5-mini"
+MODEL_PAID = "gpt-5-mini"
 HARD_LIMIT_FREE = 10
 HARD_LIMIT_PAID = 10
 BACKUP_FILE = "backup_db.json"
@@ -134,11 +134,14 @@ def edit_msg():
     data = request.json
     uid, mid, new_text = data.get('uid'), data.get('mid'), data.get('new_text')
     user = db.get(uid)
+    found = False
     for m in user['history']:
         if m.get('id') == mid or m.get('id')==str(mid):
             m['c'] = new_text
+            found = True
             break
-    db.set(uid, user)
+    if found:
+        db.set(uid, user)
     return jsonify({"ok": True})
 
 @app.route('/delete', methods=['POST'])
@@ -146,8 +149,10 @@ def delete_msg():
     data = request.json
     uid, mid = data.get('uid'), data.get('mid')
     user = db.get(uid)
+    original_len = len(user['history'])
     user['history'] = [m for m in user['history'] if m.get('id') != mid and m.get('id')!=str(mid)]
-    db.set(uid, user)
+    if len(user['history']) != original_len:
+        db.set(uid, user)
     return jsonify({"ok": True})
 
 @app.route('/history', methods=['POST'])
@@ -156,6 +161,7 @@ def history():
     uid,key = d.get('uid'), d.get('k')
     user = db.get(uid)
     is_paid = safe_str_eq(key, ACCESS_KEY)
+    # Ensure IDs exist for legacy messages
     for m in user['history']:
         if 'id' not in m:
             m['id'] = 'm'+str(int(time.time()*1000)+random.randint(0,999))
@@ -166,21 +172,26 @@ def chat():
     d = request.json
     msg, img, uid, key = d.get('msg'), d.get('img'), d.get('uid'), d.get('k')
     paid = safe_str_eq(key, ACCESS_KEY)
+    
     if msg=="SYSTEM_INIT_TRIGGER":
         return jsonify({"reply":"I'm your coach. What is your goal?","pro":paid})
+        
     user = db.get(uid)
+    
     if not paid and user['count_free'] >= HARD_LIMIT_FREE:
         return jsonify({"reply":"Free limit reached. Access required."})
     if paid and user['count'] >= HARD_LIMIT_PAID:
         return jsonify({"reply":"Daily limit reached."})
+        
     reply="..."
     if not client:
-        reply="AI Offline"
+        reply="AI Offline (Check API Key)"
     else:
         try:
             model = MODEL_PAID if paid else MODEL_FREE
             sys_p = get_sys(user['profile'])
             msgs=[{"role":"system","content":sys_p}]
+            
             if img:
                 if not paid: reply="Photos are Premium."
                 else:
@@ -188,6 +199,7 @@ def chat():
                     r=client.chat.completions.create(model=model,messages=msgs)
                     reply=r.choices[0].message.content
             else:
+                # Simple state machine for onboarding
                 if user['step']=='HOOK':
                     user['profile']['goal']=msg
                     user['profile']['vibe']=detect_vibe(msg)
@@ -198,26 +210,33 @@ def chat():
                     user['step']='DONE'
                     reply="Locked. How do you train?"
                 else:
+                    # Build context
                     context_msgs=[]
                     for m in user['history'][-6:]:
                         role='user' if m['r']=='usr' else 'assistant'
                         context_msgs.append({'role':role,'content':m['c']})
                     msgs.extend(context_msgs)
                     msgs.append({"role":"user","content":msg})
+                    
                     r=client.chat.completions.create(model=model,messages=msgs)
                     reply=r.choices[0].message.content
         except Exception as e:
             print(f"Error: {e}")
             reply="Error generating response."
+            
+    # Save to history with IDs
     new_mid_user='m'+str(int(time.time()*1000))
     new_mid_bot='m'+str(int(time.time()*1000)+1)
+    
     user['history'].append({'r':'usr','c':msg or '[IMG]','id':new_mid_user})
     user['history'].append({'r':'bot','c':reply,'id':new_mid_bot})
+    
     if not paid:
         user['count_free'] +=1
     else:
         user['count'] +=1
     db.set(uid,user)
+    
     return jsonify({"reply":reply,"pro":paid})
 
 if __name__=='__main__':
