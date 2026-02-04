@@ -11,10 +11,10 @@ from openai import OpenAI
 from collections import defaultdict
 from datetime import datetime
 
-# 👇 Redis Check
-try:
+# Redis Setup (Optional)
+try: 
     import redis
-except ImportError:
+except ImportError: 
     redis = None
 
 def safe_str_eq(a, b):
@@ -26,522 +26,348 @@ app = Flask(__name__)
 # --- CONFIG ---
 DEFAULT_KEY = "START-2026"
 ACCESS_KEY = os.environ.get("ACCESS_KEY", DEFAULT_KEY)
-if ACCESS_KEY == DEFAULT_KEY:
-    print(f"⚠️  WARNING: Using default ACCESS_KEY. Set env var for production.")
-
 REDIS_URL = os.environ.get("REDIS_URL") 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 client = None
 if OPENAI_API_KEY:
-    try:
+    try: 
         client = OpenAI(api_key=OPENAI_API_KEY)
-    except:
-        print("❌ OpenAI Client Failed to Init")
+    except: 
+        pass
 
-# --- ECONOMY & MODELS ---
-MODEL_FREE = "gpt-4o-mini"
-MODEL_PAID = "gpt-4o" 
-
-HARD_LIMIT_FREE_TOTAL = 10 
-HARD_LIMIT_PAID_DAILY = 10 
-
-# --- SYSTEM SETTINGS ---
-PHOTO_UNLOCK_DAYS = 7 
-PHOTO_INTERVAL_DAYS = 7
+# --- CONSTANTS ---
+MODEL_FREE = "gpt-5-mini"
+MODEL_PAID = "gpt-5-mini" 
+HARD_LIMIT_FREE = 10 
+HARD_LIMIT_PAID = 10 
 BACKUP_FILE = "backup_db.json"
-MAX_HISTORY_LEN = 20 
-REDIS_TTL = 2592000 # 30 Days
+MAX_HISTORY = 50 
+REDIS_TTL = 2592000
 
 # ==========================================
-# 🛠️ HELPERS
+# 🛠️ LOGIC
 # ==========================================
 def parse_baseline(text):
     nums = re.findall(r"[-+]?\d*\.\d+|\d+", text)
-    stats = {
-        'raw': text,
-        'updated': datetime.now().strftime("%Y-%m-%d")
-    }
-    if len(nums) >= 2:
-        stats['height'] = nums[0]
-        stats['weight'] = nums[1]
-    if len(nums) >= 3:
-        stats['age'] = nums[2]
+    stats = {'raw': text}
+    if len(nums) >= 2: stats['height'], stats['weight'] = nums[0], nums[1]
+    if len(nums) >= 3: stats['age'] = nums[2]
     return stats
 
 def detect_vibe(text):
     t = text.lower()
-    if any(w in t for w in ['david', 'laid', 'zyzz', 'aesthetic', 'shredded', 'veins', 'looksmax']): 
-        return "AESTHETIC_WARRIOR"
-    if any(w in t for w in ['strong', 'power', 'bench', 'deadlift', 'squat', 'heavy']): 
-        return "POWERHOUSE"
-    if any(w in t for w in ['health', 'longevity', 'balance', 'pain', 'injury', 'yoga']):
-        return "MENTOR"
-    return None
+    if any(w in t for w in ['david', 'laid', 'aesthetic']): return "AESTHETIC"
+    if any(w in t for w in ['power', 'bench', 'squat']): return "POWER"
+    return "MENTOR"
 
-# ==========================================
-# 💾 DATA MANAGER
-# ==========================================
 class DataManager:
     def __init__(self):
         self.r = None
-        self.local_cache = defaultdict(lambda: self._default_schema())
+        self.local = defaultdict(lambda: self._schema())
         self.lock = threading.Lock()
         if REDIS_URL and redis:
-            try:
+            try: 
                 self.r = redis.from_url(REDIS_URL, decode_responses=True)
-            except:
-                print("❌ Redis connection failed, using memory.")
-        if not self.r:
-            self._load_from_disk()
+            except: 
+                pass
+        if not self.r: self._load()
 
-    def _default_schema(self):
-        return {
-            'joined_at': time.time(), 
-            'count': 0,       
-            'count_free': 0,  
-            'last_reset': time.time(),
-            'history': [], 
-            'onboarding_step': 'HOOK', 
-            'profile': {'goal': None, 'stats': {}, 'vibe': 'MENTOR'}, 
-            'coach_notes': [], 
-            'last_photo_time': 0
-        }
+    def _schema(self):
+        return {'history': [], 'step': 'HOOK', 'profile': {'vibe': 'MENTOR'}, 'count': 0, 'count_free': 0, 'last': time.time()}
 
-    def _load_from_disk(self):
+    def _load(self):
         if os.path.exists(BACKUP_FILE):
             try:
-                with open(BACKUP_FILE, 'r') as f:
-                    data = json.load(f)
-                    for k, v in data.items():
-                        self.local_cache[k] = v
-            except:
-                pass
+                with open(BACKUP_FILE) as f:
+                    d = json.load(f)
+                    for k, v in d.items(): self.local[k] = v
+            except: pass
 
-    def _async_save(self):
-        def save():
+    def _save(self):
+        def task():
             with self.lock:
-                try:
-                    with open(BACKUP_FILE, 'w') as f:
-                        json.dump(self.local_cache, f)
-                except:
-                    pass
-        threading.Thread(target=save).start()
+                try: 
+                    with open(BACKUP_FILE, 'w') as f: json.dump(self.local, f)
+                except: pass
+        threading.Thread(target=task).start()
 
-    def get_user(self, uid):
+    def get(self, uid):
         if self.r:
-            try:
-                data = self.r.get(f"user:{uid}")
-                if data:
-                    return json.loads(data)
-            except:
-                pass
-        return self.local_cache[uid]
+            try: 
+                d = self.r.get(f"u:{uid}")
+                if d: return json.loads(d)
+            except: pass
+        return self.local[uid]
 
-    def save_user(self, uid, data):
-        if len(data['history']) > MAX_HISTORY_LEN:
-            data['history'] = data['history'][-MAX_HISTORY_LEN:]
-        if len(data.get('coach_notes', [])) > 5:
-            data['coach_notes'] = data['coach_notes'][-5:] 
-
+    def set(self, uid, data):
+        if len(data['history']) > MAX_HISTORY: data['history'] = data['history'][-MAX_HISTORY:]
         if self.r:
-            try:
-                self.r.set(f"user:{uid}", json.dumps(data), ex=REDIS_TTL)
-            except:
-                pass
-        self.local_cache[uid] = data
-        if not self.r:
-            self._async_save()
-
-    def reset_user(self, uid):
-        self.local_cache[uid] = self._default_schema()
-        self.save_user(uid, self.local_cache[uid])
+            try: self.r.set(f"u:{uid}", json.dumps(data), ex=REDIS_TTL)
+            except: pass
+        self.local[uid] = data
+        if not self.r: self._save()
 
 db = DataManager()
 
-# ==========================================
-# 🧠 SYSTEM PROMPT
-# ==========================================
-def get_system_prompt(profile, last_msg=""):
-    stats = profile.get('stats', {})
-    goal = profile.get('goal', '—')
+def get_sys(profile):
     vibe = profile.get('vibe', 'MENTOR')
+    guide = "Be calm."
+    if vibe == "AESTHETIC": guide = "Focus on symmetry, aesthetics, discipline. Cold tone."
+    elif vibe == "POWER": guide = "Focus on strength, load, eating. Heavy tone."
     
-    voice_guide = ""
-    if vibe == "AESTHETIC_WARRIOR":
-        voice_guide = """
-        - VOICE: Cold, Visual, Demanding.
-        - LEXICON: "Symmetry", "Taper", "Suffering", "Discipline".
-        - RULE: Do not overuse keywords. Sound natural.
-        """
-    elif vibe == "POWERHOUSE":
-        voice_guide = """
-        - VOICE: Heavy, Grounded, Simple.
-        - LEXICON: "Load", "Volume", "Eat", "Sleep", "Grind".
-        - RULE: Do not overuse keywords. Sound natural.
-        """
-    else: # MENTOR
-        voice_guide = """
-        - VOICE: Calm, Stoic, Experienced.
-        - LEXICON: "Consistency", "Patience", "Routine".
-        - RULE: Do not overuse keywords. Sound natural.
-        """
-
-    states_list = [
-        "NORMAL: Direct, helpful but brief.",
-        "RUSHED: Extremely short answers. 1-5 words. No explanations.",
-        "STERN: No tolerance for weakness. Push back.",
-        "LISTENING: Just acknowledge. Say 'Ok', 'Got it', 'Mmhm', or 'Go on'."
-    ]
-    
-    weights = [0.6, 0.2, 0.15, 0.05] 
-    if "?" in last_msg:
-        weights = [0.8, 0.1, 0.1, 0.0]
-    elif len(last_msg.split()) < 4:
-        weights = [0.2, 0.1, 0.1, 0.6] 
-
-    current_state = random.choices(states_list, weights=weights, k=1)[0]
-
-    notes = profile.get("coach_notes", [])
-    memory = f"[OBSERVATION: {random.choice(notes)}]" if notes else ""
-
-    return f"""
-    You are a personal coach. 1-on-1 text chat.
-    
-    CLIENT CONTEXT:
-    - Goal: {goal}
-    - Stats: {stats.get('raw', 'N/A')}
-    - Vibe: {vibe}
-    {memory}
-    
-    YOUR VOICE SETTINGS:
-    {voice_guide}
-    
-    CURRENT MOOD: {current_state}
-    
-    CORE RULES:
-    1. Text like a human (WhatsApp). Fragments ok. Lowercase ok.
-    2. No corporate fluff. No "I hope this helps".
-    3. If they ask for a plan too early -> "No plan yet. I don’t guess. Give me data."
-    4. If stats contradict -> "Wait. You said X before."
-    5. If progress/consistency is visible -> Acknowledge briefly. No hype.
-    
-    Be real. Not perfect.
-    """
+    return f"""Role: Personal Coach. Vibe: {vibe}. Guide: {guide}. 
+    Context: {profile.get('goal', 'New client')}. 
+    Rules: Human tone. Short answers. No fluff."""
 
 # ==========================================
-# 🎨 UI (VERSION 66 - GHOST BUSTER)
+# 🖥️ FRONTEND
 # ==========================================
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
-    <title>Coach</title>
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/dumbbell.png">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <meta name="theme-color" content="#ffffff">
-    <style>
-        :root { --bg: #ffffff; --chat-bg: #f7f7f8; --border: #e5e7eb; --user-msg: #2563eb; --bot-msg: #f3f4f6; --text-main: #111827; --text-muted: #6b7280; --accent: #2563eb; }
-        * { box-sizing: border-box; }
-        
-        /* 🔥 FIXED VIEWPORT FIX */
-        html { height: 100%; overflow: hidden; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background: var(--bg); color: var(--text-main); 
-            height: 100dvh; width: 100%; 
-            margin: 0; position: relative; overflow: hidden; 
-        }
-
-        .header { position: fixed; top: 0; left: 0; width: 100%; height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; padding-top: max(10px, env(safe-area-inset-top)); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 100; }
-        .title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-muted); }
-        .badge { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); }
-        .badge.premium { background: var(--accent); color: white; border: none; }
-        
-        /* 🔥 CHAT AREA PINNED */
-        #chat-box { 
-            position: fixed; top: 52px; bottom: 70px; left: 0; width: 100%;
-            overflow-y: auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; 
-            -webkit-overflow-scrolling: touch; background: var(--bg);
-        }
-        
-        .message { max-width: 85%; padding: 14px 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; animation: fadeIn 0.2s forwards; }
-        .bot { background: var(--bot-msg); color: var(--text-main); align-self: flex-start; border-bottom-left-radius: 4px; }
-        .user { background: var(--user-msg); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
-        .message img { max-width: 100%; border-radius: 10px; margin-top: 8px; }
-        .sys-event { align-self: center; text-align: center; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0; }
-        
-        /* 🔥 INPUT AREA PINNED */
-        .input-area { 
-            position: fixed; bottom: 0; left: 0; width: 100%;
-            border-top: 1px solid var(--border); padding: 12px; 
-            display: flex; gap: 10px; background: var(--bg); 
-            padding-bottom: max(15px, env(safe-area-inset-bottom)); 
-            z-index: 100;
-        }
-        
-        input[type="text"] { 
-            flex: 1; padding: 12px 14px; font-size: 16px; 
-            border-radius: 10px; border: 1px solid var(--border); outline: none; 
-            background: var(--chat-bg); color: var(--text-main); 
-        }
-        input[type="text"]:focus { border-color: var(--border); background: #fff; }
-        
-        .btn-icon { width: 46px; height: 46px; border-radius: 10px; border: 1px solid var(--border); background: white; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
-        .btn-send { background: var(--accent); color: white; border: none; }
-        
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        
-        #modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
-        .modal-content { background: white; padding: 24px; border-radius: 16px; width: 90%; max-width: 320px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
-        .modal-content input { width: 100%; margin: 16px 0; padding: 12px; font-size: 18px; text-align: center; letter-spacing: 2px; border: 1px solid var(--border); border-radius: 8px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#ffffff">
+<title>Coach</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+body{font-family:-apple-system,sans-serif;margin:0;height:100dvh;display:flex;flex-direction:column;overflow:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);overscroll-behavior:none;}
+.head{position:fixed;top:0;left:0;width:100%;height:50px;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:space-between;padding:0 15px;padding-top:max(10px,env(safe-area-inset-top));border-bottom:1px solid #eee;z-index:99;}
+.logo{font-weight:700;color:#888;font-size:14px;letter-spacing:1px;}
+.badge{font-size:10px;border:1px solid #ddd;padding:3px 8px;border-radius:20px;color:#888;cursor:pointer;}
+.badge.pro{background:#2563eb;color:#fff;border:none;}
+.msg-controls{font-size:14px;margin-left:8px;cursor:pointer;opacity:0.6;}
+#box{flex:1;overflow-y:auto;padding:60px 15px 80px;display:flex;flex-direction:column;gap:12px;}
+.msg{max-width:85%;padding:10px 16px;border-radius:18px;font-size:16px;line-height:1.4;word-wrap:break-word;position:relative;animation:fadeUp 0.2s ease-out;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+.bot{background:#f3f4f6;align-self:flex-start;color:#000;border-bottom-left-radius:4px;}
+.usr{background:#2563eb;color:white;align-self:flex-end;border-bottom-right-radius:4px;}
+.msg img{max-width:100%;border-radius:10px;margin-top:5px;}
+.inp{position:fixed;bottom:0;left:0;width:100%;background:#fff;padding:10px 15px;padding-bottom:max(10px,env(safe-area-inset-bottom));border-top:1px solid #eee;display:flex;gap:10px;align-items:flex-end;z-index:99;}
+.txt-div{flex:1;padding:10px 14px;border-radius:20px;border:1px solid #ddd;font-size:16px;outline:none;max-height:120px;overflow-y:auto;min-height:42px;background:#fff;caret-color:#2563eb;}
+.txt-div:empty:before{content:attr(data-placeholder);color:#9ca3af;}
+.txt-div:focus{border-color:#999;}
+.btn{width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid #ddd;font-size:20px;cursor:pointer;color:#555;flex-shrink:0;}
+.send{background:#2563eb;color:white;border:none;}
+#mod{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(3px);}
+.win{background:#fff;padding:30px;border-radius:20px;width:80%;max-width:300px;text-align:center;}
+</style>
 </head>
 <body>
-    <div class="header">
-        <div class="title">COACH V66</div>
-        <div id="badge" class="badge" onclick="openModal()">ACCESS</div>
-    </div>
-    
-    <div id="chat-box"></div>
-    
-    <div class="input-area">
-        <input type="file" id="fileInp" accept="image/*" style="display:none" tabindex="-1" aria-hidden="true" onchange="handleFile(this)">
-        <button class="btn-icon" style="color: #6b7280;" onclick="document.getElementById('fileInp').click()">📷</button>
-        
-        <input type="text" id="inp" placeholder="Message..." 
-               autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false"
-               enterkeyhint="send" onkeypress="if(event.key==='Enter') send()">
-        
-        <button id="sendBtn" class="btn-icon btn-send" onclick="send()">↑</button>
-    </div>
-    
-    <div id="modal">
-        <div class="modal-content">
-            <h3 style="color:#111827; margin:0; font-size:16px;">MEMBER ACCESS</h3>
-            <input type="hidden" id="key-val" placeholder="ENTER KEY">
-            <button class="btn-icon btn-send" style="width:100%; height:auto; padding:12px; font-size:14px; font-weight:600;" onclick="verifyAndSave()">UNLOCK</button>
-            <p onclick="closeModal()" style="margin-top:20px; color:#6b7280; font-size:12px; cursor:pointer;">Close</p>
-        </div>
-    </div>
+<div class="head">
+    <div class="logo">COACH V74</div>
+    <div id="sts" class="badge" onclick="showAuth()">ACCESS</div>
+</div>
 
-    <script>
-        const chat = document.getElementById('chat-box');
-        const inp = document.getElementById('inp');
-        const keyInp = document.getElementById('key-val');
-        
-        let deviceId = localStorage.getItem('coach_uid');
-        if (!deviceId) { deviceId = 'user_' + Math.random().toString(36).substr(2, 9); localStorage.setItem('coach_uid', deviceId); }
+<div id="box" onclick="blurInput()"></div>
 
-        function openModal() { 
-            document.getElementById('modal').style.display='flex';
-            // 🔥 Switch to text ONLY when visible
-            keyInp.type = 'text';
-            keyInp.focus();
-        }
-        
-        function closeModal() {
-            document.getElementById('modal').style.display='none';
-            // 🔥 Switch back to hidden to kill arrows
-            keyInp.type = 'hidden';
-            keyInp.blur();
-        }
-        
-        function verifyAndSave() {
-            const val = keyInp.value.trim();
-            fetch('/verify', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({access_key: val}) })
-            .then(r => r.json()).then(d => { 
-                if (d.valid) { localStorage.setItem('coach_key', val); location.reload(); } 
-                else { alert("Invalid Key"); } 
-            });
-        }
+<div class="inp">
+    <div class="btn" onclick="trigFile()">📷</div>
+    <div class="txt-div" id="txt" contenteditable="true" data-placeholder="Message..."></div>
+    <div class="btn send" onclick="send()">↑</div>
+</div>
 
-        function addMsg(text, type, imgUrl=null) {
-            const d = document.createElement('div');
-            d.className = 'message ' + type;
-            if (imgUrl) {
-                d.innerHTML = `<img src="${imgUrl}" style="max-height:150px; display:block; margin-bottom:8px;">` + (text || "Analyzing...");
-            } else if (type === 'user') {
-                d.innerText = text;
-            } else {
-                if(type.includes('sys-')) { d.className = 'sys-event'; d.innerText = text; } 
-                else { 
-                    let clean = text.replace(/\\n\\n\\n/g, "\\n\\n");
-                    d.innerHTML = marked.parse(clean); 
-                }
+<div id="mod">
+    <div class="win">
+        <h3>UNLOCK</h3>
+        <div id="auth-area"></div>
+        <p onclick="closeAuth()" style="margin-top:20px;color:#888;font-size:12px;">Close</p>
+    </div>
+</div>
+
+<script>
+const b=document.getElementById('box'), t=document.getElementById('txt'), uid=localStorage.getItem('uid')||'u'+Date.now();
+localStorage.setItem('uid',uid);
+
+function blurInput(){ t.blur(); }
+
+function add(msg,role,img,mid=null){
+    let d=document.createElement('div');d.className='msg '+role;d.dataset.mid=mid||('m'+Date.now());
+    if(img)d.innerHTML=`<img src="${img}"><br>`+(msg||'Analyzing...');
+    else d.innerHTML=role=='usr'?msg.replace(/\\n/g,'<br>'):marked.parse(msg);
+    
+    if(role=='usr'){
+        let ctrls=document.createElement('span');ctrls.className='msg-controls';ctrls.innerText='✎';
+        ctrls.onclick=(e)=>{e.stopPropagation();showEditDelete(d.dataset.mid,msg);};
+        d.appendChild(ctrls);
+    }
+    b.appendChild(d);b.scrollTop=b.scrollHeight;
+}
+
+function showEditDelete(mid,currentText){
+    let newText=prompt("Edit message:",currentText);
+    if(newText!==null && newText!==currentText){
+        if(newText===""){
+            if(confirm("Delete message?")){
+                fetch('/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:uid,mid:mid})})
+                .then(r=>r.json()).then(d=>{if(d.ok)location.reload();});
             }
-            chat.appendChild(d); chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
-        }
-
-        function handleFile(input) {
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const img = new Image(); img.src = e.target.result;
-                    img.onload = function() {
-                        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-                        const MAX_W = 800; let w=img.width; let h=img.height;
-                        if(w>MAX_W){ h*=MAX_W/w; w=MAX_W; }
-                        canvas.width=w; canvas.height=h; ctx.drawImage(img,0,0,w,h);
-                        send(null, canvas.toDataURL('image/jpeg', 0.7));
-                    }
-                }; reader.readAsDataURL(input.files[0]);
-            }
-        }
-
-        function send(force=null, imgData=null) {
-            let val = force || inp.value.trim();
-            if (!val && !imgData) return;
-            if (!force) addMsg(val, 'user', imgData);
-            inp.value = ''; 
-            
-            const payload = {
-                message: val || "Analyze this photo.",
-                image: imgData,
-                access_key: localStorage.getItem('coach_key'), 
-                device_id: deviceId
-            };
-
-            fetch('/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
-            .then(r=>r.json()).then(d=>{
-                if (d.is_premium) { document.getElementById('badge').innerText="PREMIUM"; document.getElementById('badge').classList.add("premium"); }
-                addMsg(d.reply, d.type || 'bot');
-            })
-            .catch(() => addMsg("Connection Error", "sys-error"));
-        }
-
-        const hist = JSON.parse(localStorage.getItem('coach_history') || "[]");
-        if (hist.length > 0) {
-            hist.forEach(m => addMsg(m.content, m.role === 'user' ? 'user' : 'bot'));
         } else {
-            send("SYSTEM_INIT_TRIGGER");
+            fetch('/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:uid,mid:mid,new_text:newText})})
+            .then(r=>r.json()).then(d=>{if(d.ok)location.reload();});
         }
-    </script>
+    }
+}
+
+function post(txt,img){
+    txt=txt||t.innerText.trim();if(!txt && !img)return;
+    if(!img){add(txt,'usr');t.innerText='';}else add("Analyzing...",'usr',img);
+    
+    fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({msg:txt,img,uid,k:localStorage.getItem('key')})})
+    .then(r=>r.json()).then(d=>{
+        if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";}
+        add(d.reply,'bot');
+    }).catch(()=>add("Error connecting",'bot'));
+}
+
+function send(){post();}
+
+t.addEventListener('keydown',(e)=>{if(e.key==='Enter'){if(e.shiftKey)return;e.preventDefault();send();}});
+t.addEventListener('paste',(e)=>{e.preventDefault();let text=(e.originalEvent||e).clipboardData.getData('text/plain');document.execCommand('insertText',false,text);});
+
+function showAuth(){
+    document.getElementById('mod').style.display='flex';
+    document.getElementById('auth-area').innerHTML='<input type="text" id="key" placeholder="ENTER KEY" style="width:100%;margin:15px 0;text-align:center;font-size:16px;padding:10px;border:1px solid #ddd;border-radius:10px;"><div class="btn send" style="width:100%;border-radius:15px;" onclick="checkKey()">GO</div>';
+    document.getElementById('key').focus();
+}
+function closeAuth(){document.getElementById('mod').style.display='none';document.getElementById('auth-area').innerHTML='';}
+
+function checkKey(){
+    let k=document.getElementById('key').value.trim();
+    fetch('/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({k})})
+    .then(r=>r.json()).then(d=>{if(d.ok){localStorage.setItem('key',k);location.reload();}else alert('Invalid');});
+}
+
+function trigFile(){
+    let f=document.createElement('input');f.type='file';f.accept='image/*';
+    f.onchange=e=>{
+        let r=new FileReader();
+        r.onload=ev=>{
+            let i=new Image();i.src=ev.target.result;
+            i.onload=()=>{
+                let c=document.createElement('canvas');let x=c.getContext('2d');
+                let w=i.width,h=i.height,m=800;if(w>m){h*=m/w;w=m;}c.width=w;c.height=h;
+                x.drawImage(i,0,0,w,h);
+                post(null,c.toDataURL('image/jpeg',0.8));
+            }
+        };r.readAsDataURL(f.files[0]);
+    };f.click();
+}
+
+// Load history
+fetch('/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:uid,k:localStorage.getItem('key')})})
+.then(r=>r.json()).then(d=>{
+    if(d.history&&d.history.length>0){
+        d.history.forEach(m=>{add(m.c,m.r,null,m.id);});
+    } else post("SYSTEM_INIT_TRIGGER");
+    if(d.pro){document.getElementById('sts').innerText="PRO";document.getElementById('sts').className="badge pro";}
+});
+</script>
 </body>
 </html>
 """
 
+# ==========================================
+# 🛠️ SERVER ROUTES
+# ==========================================
 @app.route('/')
 def home(): return render_template_string(HTML_PAGE)
 
 @app.route('/verify', methods=['POST'])
-def verify():
-    key = request.json.get('access_key', '')
-    if safe_str_eq(key, ACCESS_KEY): return jsonify({"valid": True})
-    return jsonify({"valid": False})
+def verify(): return jsonify({"ok": safe_str_eq(request.json.get('k'), ACCESS_KEY)})
+
+@app.route('/edit', methods=['POST'])
+def edit_msg():
+    data=request.json
+    uid,mid,new_text=data.get('uid'),data.get('mid'),data.get('new_text')
+    user=db.get(uid)
+    for m in user['history']:
+        if m.get('id')==mid or m.get('id')==str(mid):
+            m['c']=new_text;break
+    db.set(uid,user)
+    return jsonify({"ok":True})
+
+@app.route('/delete', methods=['POST'])
+def delete_msg():
+    data=request.json
+    uid,mid=data.get('uid'),data.get('mid')
+    user=db.get(uid)
+    user['history']=[m for m in user['history'] if m.get('id')!=mid and m.get('id')!=str(mid)]
+    db.set(uid,user)
+    return jsonify({"ok":True})
+
+@app.route('/history', methods=['POST'])
+def history():
+    d=request.json
+    uid,key=d.get('uid'),d.get('k')
+    user=db.get(uid)
+    is_paid=safe_str_eq(key,ACCESS_KEY)
+    # Generate IDs if missing (for legacy messages)
+    for m in user['history']:
+        if 'id' not in m: m['id']='m'+str(int(time.time()*1000)+random.randint(0,999))
+    return jsonify({"history":user['history'],"pro":is_paid})
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    data = request.json
-    msg = data.get("message", "").strip()
-    img_data = data.get("image")
-    ukey = data.get("access_key", "")
-    user_id = data.get("device_id")
+    d=request.json
+    msg,img,uid,key=d.get('msg'),d.get('img'),d.get('uid'),d.get('k')
+    paid=safe_str_eq(key,ACCESS_KEY)
     
-    is_paid = safe_str_eq(ukey, ACCESS_KEY)
-
-    if msg == "SYSTEM_INIT_TRIGGER":
-        return jsonify({
-            "reply": "I’m your coach.\n\n**What is your goal?**",
-            "type": "bot",
-            "is_premium": is_paid
-        })
-
-    if not client: return jsonify({"reply": "AI OFFLINE", "type": "sys-error"})
-
-    user = db.get_user(user_id)
-    current_time = time.time()
-
-    if not is_paid:
-        user_free_count = user.get('count_free', 0)
-        if user_free_count >= HARD_LIMIT_FREE_TOTAL:
-            return jsonify({"reply": "💬 Бесплатный осмотр окончен. Чтобы тренироваться дальше, нужен доступ.", "type": "sys-event"}) 
+    if msg=="SYSTEM_INIT_TRIGGER": return jsonify({"reply":"I'm your coach. What is your goal?","pro":paid})
+    
+    user=db.get(uid)
+    if not paid and user['count_free']>=HARD_LIMIT_FREE: return jsonify({"reply":"Free limit reached. Access required."})
+    if paid and user['count']>=HARD_LIMIT_PAID: return jsonify({"reply":"Daily limit reached."})
+    
+    reply="..."
+    if not client: 
+        reply="AI Offline"
     else:
-        if (current_time - user.get('last_reset', 0)) > 86400:
-            user['count'] = 0
-            user['last_reset'] = current_time
-        if user['count'] >= HARD_LIMIT_PAID_DAILY:
-            return jsonify({"reply": "💤 На сегодня всё (10/10). Дисциплина — это и отдых тоже. До завтра.", "type": "sys-event"})
-
-    if not img_data:
-        stranger_keywords = r"\b(friend|partner|brother|sister|wife|husband|mom|dad)\b"
-        self_keywords = r"\b(i|me|myself)\b"
-        if re.search(stranger_keywords, msg.lower()) and not re.search(self_keywords, msg.lower()):
-            return jsonify({"reply": "✋ I coach **YOU**. I don't build plans for strangers.", "type": "bot"})
-
-    if img_data:
-        if not is_paid: return jsonify({"reply": "📷 **Photo Analysis is Premium.**", "type": "sys-error"})
-        if (current_time - user.get('joined_at', current_time)) / 86400 < PHOTO_UNLOCK_DAYS:
-             return jsonify({"reply": f"✋ **Not yet.**\nWe just started. I need to see your discipline first.", "type": "bot"})
-
         try:
-            resp = client.chat.completions.create(
-                model=MODEL_PAID, 
-                messages=[
-                    {"role": "system", "content": "Analyze physique. Brutally honest. 2 sentences max."},
-                    {"role": "user", "content": [{"type": "text", "text": "Analyze."}, {"type": "image_url", "image_url": {"url": img_data}}]}
-                ],
-                max_tokens=150, temperature=0.6
-            )
-            analysis = resp.choices[0].message.content
-            user['coach_notes'].append(f"[OBSERVATION: Visual {datetime.now().strftime('%m-%d')}: {analysis[:50]}...]")
-            user['last_photo_time'] = current_time
-            db.save_user(user_id, user)
-            return jsonify({"reply": analysis, "is_premium": True})
-        except: return jsonify({"reply": "Image Error", "type": "sys-error"})
-
-    if user.get('onboarding_step') != 'DONE':
-        if user['onboarding_step'] == 'HOOK':
-            user['profile']['goal'] = msg 
-            user['profile']['vibe'] = detect_vibe(msg) or "MENTOR"
-            user['onboarding_step'] = 'BASELINE'
-            db.save_user(user_id, user)
-            time.sleep(1)
-            return jsonify({"reply": "Got it. I can get you there.\n\nNeed facts:\n**Height (cm), Weight (kg), Age.**", "type": "bot"})
-        
-        if user['onboarding_step'] == 'BASELINE':
-            stats = parse_baseline(msg)
-            if not stats.get('height'): return jsonify({"reply": "Need numbers. Height & Weight.", "type": "bot"})
-            user['profile']['stats'] = stats; user['onboarding_step'] = 'DONE'; db.save_user(user_id, user)
-            time.sleep(1)
-            return jsonify({"reply": "Profile locked. \n\nYou're not in a bad spot, but getting there takes discipline, not motivation.\n\n**Tell me exactly how you train right now.**", "type": "bot"})
-
-    if user.get('onboarding_step') == 'DONE' and len(msg.split()) > 5:
-        new_vibe = detect_vibe(msg)
-        current_vibe = user['profile'].get('vibe')
-        if new_vibe and new_vibe != current_vibe:
-            user['profile']['vibe'] = new_vibe
-            user['coach_notes'].append(f"[SHIFT: Focus moved to {new_vibe}]")
-            db.save_user(user_id, user)
-
-    user['count'] += 1 
+            model=MODEL_PAID if paid else MODEL_FREE
+            sys_p=get_sys(user['profile'])
+            msgs=[{"role":"system","content":sys_p}]
+            
+            if img:
+                if not paid: reply="Photos are Premium."
+                else:
+                    msgs.append({"role":"user","content":[{"type":"text","text":"Analyze"},{"type":"image_url","image_url":{"url":img}}]})
+                    r=client.chat.completions.create(model=model,messages=msgs)
+                    reply=r.choices[0].message.content
+            else:
+                if user['step']=='HOOK':
+                    user['profile']['goal']=msg;user['profile']['vibe']=detect_vibe(msg);user['step']='BASE';reply="Got it. Height/Weight?"
+                elif user['step']=='BASE':
+                    user['profile']['stats']=msg;user['step']='DONE';reply="Locked. How do you train?"
+                else:
+                    context_msgs=[]
+                    for m in user['history'][-6:]:
+                        role='user' if m['r']=='usr' else 'assistant'
+                        context_msgs.append({'role':role,'content':m['c']})
+                    msgs.extend(context_msgs)
+                    msgs.append({"role":"user","content":msg})
+                    r=client.chat.completions.create(model=model,messages=msgs)
+                    reply=r.choices[0].message.content
+        except Exception as e:
+            print(f"Error: {e}")
+            reply="Error generating response."
+            
+    # Save with unique IDs for editing
+    new_mid_user='m'+str(int(time.time()*1000))
+    new_mid_bot='m'+str(int(time.time()*1000)+1)
     
-    sys_prompt = get_system_prompt(user['profile'], msg)
-    messages = [{"role": "system", "content": sys_prompt}]
-    clean_history = [m for m in user['history'] if m.get('content') != "SYSTEM_INIT_TRIGGER"][-12:]
-    messages.extend(clean_history)
-    messages.append({"role": "user", "content": msg})
+    user['history'].append({'r':'usr','c':msg or '[IMG]','id':new_mid_user})
+    user['history'].append({'r':'bot','c':reply,'id':new_mid_bot})
     
-    time.sleep(random.uniform(0.5, 2.5))
+    if not paid: user['count_free']+=1
+    else: user['count']+=1
+    db.set(uid,user)
+    
+    return jsonify({"reply":reply,"pro":paid})
 
-    try:
-        model_to_use = MODEL_PAID if is_paid else MODEL_FREE
-        resp = client.chat.completions.create(model=model_to_use, messages=messages, temperature=0.65)
-        reply = resp.choices[0].message.content.strip()
-        if not reply: reply = "..."
-        
-        user['history'].append({"role": "user", "content": msg})
-        user['history'].append({"role": "assistant", "content": reply})
-        
-        if not is_paid:
-            user['count_free'] = user.get('count_free', 0) + 1
-        
-        db.save_user(user_id, user)
-        return jsonify({"reply": reply, "is_premium": is_paid})
-    except: return jsonify({"reply": "Connection Error", "type": "sys-error"})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+if __name__=='__main__':
+    app.run(host='0.0.0.0',port=int(os.environ.get("PORT",5000)))
