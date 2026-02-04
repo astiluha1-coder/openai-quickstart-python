@@ -1,1 +1,15 @@
-
+body,html{margin:0;padding:0;height:100%;font-family:sans-serif;background:#f4f4f4}
+header.header{padding:env(safe-area-inset-top) 15px 10px;display:flex;justify-content:space-between;align-items:center;background:#fff;position:sticky;top:0;z-index:10;box-shadow:0 1px 5px rgba(0,0,0,0.1)}
+header h1{margin:0;font-size:1.5rem}
+header .badge{background:#ff5a5f;color:#fff;padding:3px 8px;border-radius:12px;font-size:0.8rem}
+.chat-window{padding:15px;padding-bottom:calc(60px + env(safe-area-inset-bottom));overflow-y:auto;height:calc(100vh - 120px);display:flex;flex-direction:column;gap:8px}
+.input-area{position:fixed;bottom:env(safe-area-inset-bottom);left:0;width:100%;display:flex;align-items:center;padding:10px;background:#fff;gap:5px;box-shadow:0 -1px 5px rgba(0,0,0,0.1)}
+.input-area input{flex:1;padding:10px;border-radius:20px;border:1px solid #ccc}
+.input-area button{padding:10px 15px;border:none;border-radius:50%;background:#007bff;color:#fff;font-size:1rem;cursor:pointer}
+.bot{background:#e2e2e2;align-self:flex-start;padding:10px;border-radius:10px;max-width:80%}
+.usr{background:#007bff;color:white;align-self:flex-end;padding:10px;border-radius:10px;max-width:80%}
+#plusMenu{position:absolute;bottom:60px;left:10px;background:#fff;border:1px solid #ccc;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:5px;z-index:20}
+#plusMenu button{border-radius:5px;background:#eee;color:#333;width:100%}
+.hidden{display:none;}
+.skeleton{width:80%;height:16px;background:#ddd;border-radius:8px;animation:pulse 1.2s infinite;}
+@keyframes pulse{0%{opacity:1}50%{opacity:0.4}100%{opacity:1}}
