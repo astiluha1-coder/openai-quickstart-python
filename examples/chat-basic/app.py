@@ -21,8 +21,8 @@ if OPENAI_API_KEY:
     except:
         pass
 
-MODEL_FREE = "gpt-5-mini"
-MODEL_PAID = "gpt-5-mini"
+MODEL_FREE = "gpt-4o-mini"
+MODEL_PAID = "gpt-4o"
 HARD_LIMIT_FREE = 10
 HARD_LIMIT_PAID = 10
 BACKUP_FILE = "backup_db.json"
