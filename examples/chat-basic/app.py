@@ -11,8 +11,11 @@ from openai import OpenAI
 from collections import defaultdict
 from datetime import datetime
 
-try: import redis
-except ImportError: redis = None
+# 👇 Redis Check (Fixed Indentation)
+try:
+    import redis
+except ImportError:
+    redis = None
 
 def safe_str_eq(a, b):
     if not a or not b: return False
@@ -27,8 +30,10 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 client = None
 if OPENAI_API_KEY:
-    try: client = OpenAI(api_key=OPENAI_API_KEY)
-    except: pass
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+    except:
+        pass
 
 MODEL = "gpt-4o-mini"
 
@@ -46,7 +51,12 @@ MAX_HISTORY_LEN = 20
 def parse_baseline(text):
     nums = re.findall(r"[-+]?\d*\.\d+|\d+", text)
     if len(nums) >= 2:
-        return {'raw': text, 'height': nums[0], 'weight': nums[1], 'updated': datetime.now().strftime("%Y-%m-%d")}
+        return {
+            'raw': text,
+            'height': nums[0],
+            'weight': nums[1],
+            'updated': datetime.now().strftime("%Y-%m-%d")
+        }
     return {'raw': text, 'updated': datetime.now().strftime("%Y-%m-%d")}
 
 def detect_vibe(text):
@@ -56,7 +66,7 @@ def detect_vibe(text):
     return "MENTOR"
 
 # ==========================================
-# 💾 DATA MANAGER
+# 💾 DATA MANAGER (FIXED SYNTAX)
 # ==========================================
 class DataManager:
     def __init__(self):
@@ -64,9 +74,12 @@ class DataManager:
         self.local_cache = defaultdict(lambda: self._default_schema())
         self.lock = threading.Lock()
         if REDIS_URL and redis:
-            try: self.r = redis.from_url(REDIS_URL, decode_responses=True)
-            except: pass
-        if not self.r: self._load_from_disk()
+            try:
+                self.r = redis.from_url(REDIS_URL, decode_responses=True)
+            except:
+                pass
+        if not self.r:
+            self._load_from_disk()
 
     def _default_schema(self):
         return {
@@ -81,44 +94,57 @@ class DataManager:
             try:
                 with open(BACKUP_FILE, 'r') as f:
                     data = json.load(f)
-                    for k, v in data.items(): self.local_cache[k] = v
-            except: pass
+                    for k, v in data.items():
+                        self.local_cache[k] = v
+            except:
+                pass
 
     def _async_save(self):
         def save():
             with self.lock:
-                try: with open(BACKUP_FILE, 'w') as f: json.dump(self.local_cache, f)
-                except: pass
+                try:
+                    with open(BACKUP_FILE, 'w') as f:
+                        json.dump(self.local_cache, f)
+                except:
+                    pass
         threading.Thread(target=save).start()
 
     def get_user(self, uid):
         if self.r:
             try:
                 data = self.r.get(f"user:{uid}")
-                if data: return json.loads(data)
-            except: pass
+                if data:
+                    return json.loads(data)
+            except:
+                pass
         return self.local_cache[uid]
 
     def save_user(self, uid, data):
-        if len(data['history']) > MAX_HISTORY_LEN: data['history'] = data['history'][-MAX_HISTORY_LEN:]
+        if len(data['history']) > MAX_HISTORY_LEN:
+            data['history'] = data['history'][-MAX_HISTORY_LEN:]
         if self.r:
-            try: self.r.set(f"user:{uid}", json.dumps(data), ex=604800)
-            except: pass
+            try:
+                self.r.set(f"user:{uid}", json.dumps(data), ex=604800)
+            except:
+                pass
         self.local_cache[uid] = data
-        if not self.r: self._async_save()
+        if not self.r:
+            self._async_save()
+
+    def reset_user(self, uid):
+        self.local_cache[uid] = self._default_schema()
+        self.save_user(uid, self.local_cache[uid])
 
 db = DataManager()
 
 # ==========================================
-# 🧠 SYSTEM PROMPT (IMPERFECT & ALIVE)
+# 🧠 SYSTEM PROMPT
 # ==========================================
 def get_system_prompt(profile):
     stats = profile.get('stats', {})
     goal = profile.get('goal', '—')
     vibe = profile.get('vibe', 'MENTOR')
     
-    # 🔥 DYNAMIC MOOD (Human Variance)
-    # The coach isn't always the same. Sometimes he's busy. Sometimes he listens.
     states = [
         "NORMAL: Direct, helpful but brief.",
         "RUSHED: Extremely short answers. 1-5 words. No explanations.",
@@ -127,7 +153,6 @@ def get_system_prompt(profile):
     ]
     current_state = random.choices(states, weights=[0.6, 0.15, 0.15, 0.1], k=1)[0]
 
-    # Memory Injection
     notes = profile.get("coach_notes", [])
     memory = f"INTERNAL NOTE: {random.choice(notes)}" if notes else ""
 
@@ -152,7 +177,7 @@ def get_system_prompt(profile):
     """
 
 # ==========================================
-# 🎨 UI (PREMIUM DARK MODE)
+# 🎨 UI
 # ==========================================
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -321,14 +346,14 @@ def chat():
         user['count'] = 0; user['last_reset'] = current_time
 
     # 🛑 "STRANGER" FILTER
-    if not img_data and re.search(r"\b(friend|partner|brother|sister|wife|husband)\b", msg.lower()):
-        return jsonify({"reply": "✋ I coach **YOU**. No plans for strangers.", "type": "bot"})
+    if not img_data and re.search(r"\b(friend|partner|brother|sister|wife|husband|mom|dad)\b", msg.lower()):
+        return jsonify({"reply": "✋ I coach **YOU**. I don't build plans for strangers.", "type": "bot"})
 
     # 📸 PHOTO ANALYSIS
     if img_data:
         if not is_paid: return jsonify({"reply": "📷 **Photo Analysis is Premium.**", "type": "sys-error"})
         if (current_time - user.get('joined_at', current_time)) / 86400 < PHOTO_UNLOCK_DAYS:
-             return jsonify({"reply": f"✋ **Not yet.** Earn it. Discipline first.", "type": "bot"})
+             return jsonify({"reply": f"✋ **Not yet.**\nWe just started. I need to see your discipline first.", "type": "bot"})
 
         try:
             resp = client.chat.completions.create(
@@ -376,7 +401,8 @@ def chat():
     sys_prompt = get_system_prompt(user['profile'])
     
     messages = [{"role": "system", "content": sys_prompt}]
-    messages.extend([m for m in user['history'] if m.get('content') != "SYSTEM_INIT_TRIGGER"][-12:])
+    clean_history = [m for m in user['history'] if m.get('content') != "SYSTEM_INIT_TRIGGER"][-10:]
+    messages.extend(clean_history)
     messages.append({"role": "user", "content": msg})
     
     time.sleep(random.uniform(0.5, 2.5)) # 🧠 THINKING PAUSE
