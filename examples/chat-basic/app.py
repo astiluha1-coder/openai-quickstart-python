@@ -230,7 +230,7 @@ def get_system_prompt(profile, last_msg=""):
     """
 
 # ==========================================
-# 🎨 UI (IOS NATIVE FIX V2)
+# 🎨 UI (SAFARI KILLER)
 # ==========================================
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -247,16 +247,15 @@ HTML_PAGE = """
         :root { --bg: #ffffff; --chat-bg: #f7f7f8; --border: #e5e7eb; --user-msg: #2563eb; --bot-msg: #f3f4f6; --text-main: #111827; --text-muted: #6b7280; --accent: #2563eb; }
         * { box-sizing: border-box; }
         
-        /* 🔥 IOS FIX: Rigid Body Lock */
-        html, body { 
+        /* 🔥 CLEAN BODY SETUP */
+        body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             background: var(--bg); color: var(--text-main); 
-            height: 100%; 
+            height: 100dvh; /* Dynamic Height is key */
             width: 100%;
-            position: fixed; 
-            inset: 0;
-            overflow: hidden;
+            margin: 0; 
             display: flex; flex-direction: column; 
+            overflow: hidden; /* No bounce */
         }
 
         .header { height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; padding-top: max(10px, env(safe-area-inset-top)); background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); flex-shrink: 0; }
@@ -273,8 +272,16 @@ HTML_PAGE = """
         .sys-event { text-align: center; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0; }
         
         .input-area { border-top: 1px solid var(--border); padding: 12px; display: flex; gap: 10px; background: var(--bg); padding-bottom: max(15px, env(safe-area-inset-bottom)); flex-shrink: 0; }
-        input[type="text"] { flex: 1; padding: 12px 14px; font-size: 16px; border-radius: 10px; border: 1px solid var(--border); outline: none; background: var(--chat-bg); color: var(--text-main); }
+        
+        /* 🔥 INPUT STYLING */
+        input[type="text"] { 
+            flex: 1; padding: 12px 14px; 
+            font-size: 16px; /* Prevents iOS Zoom */
+            border-radius: 10px; border: 1px solid var(--border); 
+            outline: none; background: var(--chat-bg); color: var(--text-main); 
+        }
         input[type="text"]:focus { border-color: var(--border); background: #fff; }
+        
         .btn-icon { width: 46px; height: 46px; border-radius: 10px; border: 1px solid var(--border); background: white; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center; }
         .btn-send { background: var(--accent); color: white; border: none; }
         
@@ -303,7 +310,7 @@ HTML_PAGE = """
     <div id="modal">
         <div class="modal-content">
             <h3 style="color:#111827; margin:0; font-size:16px;">MEMBER ACCESS</h3>
-            <input type="text" id="key-val" placeholder="ENTER KEY" disabled>
+            <input type="text" id="key-val" placeholder="ENTER KEY" tabindex="-1">
             <button class="btn-icon btn-send" style="width:100%; height:auto; padding:12px; font-size:14px; font-weight:600;" onclick="verifyAndSave()">UNLOCK</button>
             <p onclick="closeModal()" style="margin-top:20px; color:#6b7280; font-size:12px; cursor:pointer;">Close</p>
         </div>
@@ -319,13 +326,15 @@ HTML_PAGE = """
 
         function openModal() { 
             document.getElementById('modal').style.display='flex';
-            keyInp.disabled = false;
+            // Enable field only when visible
+            keyInp.setAttribute('tabindex', '0');
             keyInp.focus();
         }
         
         function closeModal() {
             document.getElementById('modal').style.display='none';
-            keyInp.disabled = true;
+            // Hide field from keyboard again
+            keyInp.setAttribute('tabindex', '-1');
             keyInp.blur();
         }
         
@@ -422,7 +431,6 @@ def chat():
     
     is_paid = safe_str_eq(ukey, ACCESS_KEY)
 
-    # 🔥 HARD INTERCEPT
     if msg == "SYSTEM_INIT_TRIGGER":
         return jsonify({
             "reply": "I’m your coach.\n\n**What is your goal?**",
@@ -447,14 +455,12 @@ def chat():
         if user['count'] >= HARD_LIMIT_PAID_DAILY:
             return jsonify({"reply": "💤 На сегодня всё (10/10). Дисциплина — это и отдых тоже. До завтра.", "type": "sys-event"})
 
-    # 🛑 STRANGER FILTER
     if not img_data:
         stranger_keywords = r"\b(friend|partner|brother|sister|wife|husband|mom|dad)\b"
         self_keywords = r"\b(i|me|myself)\b"
         if re.search(stranger_keywords, msg.lower()) and not re.search(self_keywords, msg.lower()):
             return jsonify({"reply": "✋ I coach **YOU**. I don't build plans for strangers.", "type": "bot"})
 
-    # 📸 PHOTO ANALYSIS
     if img_data:
         if not is_paid: return jsonify({"reply": "📷 **Photo Analysis is Premium.**", "type": "sys-error"})
         if (current_time - user.get('joined_at', current_time)) / 86400 < PHOTO_UNLOCK_DAYS:
@@ -462,7 +468,7 @@ def chat():
 
         try:
             resp = client.chat.completions.create(
-                model=MODEL_PAID, # Use smart model for vision
+                model=MODEL_PAID, 
                 messages=[
                     {"role": "system", "content": "Analyze physique. Brutally honest. 2 sentences max."},
                     {"role": "user", "content": [{"type": "text", "text": "Analyze."}, {"type": "image_url", "image_url": {"url": img_data}}]}
@@ -476,7 +482,6 @@ def chat():
             return jsonify({"reply": analysis, "is_premium": True})
         except: return jsonify({"reply": "Image Error", "type": "sys-error"})
 
-    # 🛤️ ONBOARDING
     if user.get('onboarding_step') != 'DONE':
         if user['onboarding_step'] == 'HOOK':
             user['profile']['goal'] = msg 
@@ -493,7 +498,6 @@ def chat():
             time.sleep(1)
             return jsonify({"reply": "Profile locked. \n\nYou're not in a bad spot, but getting there takes discipline, not motivation.\n\n**Tell me exactly how you train right now.**", "type": "bot"})
 
-    # 🔁 VIBE RE-CALIBRATION
     if user.get('onboarding_step') == 'DONE' and len(msg.split()) > 5:
         new_vibe = detect_vibe(msg)
         current_vibe = user['profile'].get('vibe')
@@ -502,7 +506,6 @@ def chat():
             user['coach_notes'].append(f"[SHIFT: Focus moved to {new_vibe}]")
             db.save_user(user_id, user)
 
-    # CHAT GENERATION
     user['count'] += 1 
     
     sys_prompt = get_system_prompt(user['profile'], msg)
