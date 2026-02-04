@@ -11,7 +11,7 @@ from openai import OpenAI
 from collections import defaultdict
 from datetime import datetime
 
-# 👇 Redis Check (Fixed Indentation)
+# 👇 Redis Check
 try:
     import redis
 except ImportError:
@@ -30,10 +30,8 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
 client = None
 if OPENAI_API_KEY:
-    try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-    except:
-        pass
+    try: client = OpenAI(api_key=OPENAI_API_KEY)
+    except: pass
 
 MODEL = "gpt-4o-mini"
 
@@ -66,7 +64,7 @@ def detect_vibe(text):
     return "MENTOR"
 
 # ==========================================
-# 💾 DATA MANAGER (FIXED SYNTAX)
+# 💾 DATA MANAGER
 # ==========================================
 class DataManager:
     def __init__(self):
@@ -74,19 +72,18 @@ class DataManager:
         self.local_cache = defaultdict(lambda: self._default_schema())
         self.lock = threading.Lock()
         if REDIS_URL and redis:
-            try:
-                self.r = redis.from_url(REDIS_URL, decode_responses=True)
-            except:
-                pass
-        if not self.r:
-            self._load_from_disk()
+            try: self.r = redis.from_url(REDIS_URL, decode_responses=True)
+            except: pass
+        if not self.r: self._load_from_disk()
 
     def _default_schema(self):
         return {
-            'joined_at': time.time(), 'count': 0, 'last_reset': time.time(),
+            'joined_at': time.time(),
+            'count': 0, 'last_reset': time.time(),
             'history': [], 'onboarding_step': 'HOOK', 
             'profile': {'goal': None, 'stats': {}, 'vibe': 'MENTOR'}, 
-            'coach_notes': [], 'last_photo_time': 0
+            'coach_notes': [],
+            'last_photo_time': 0
         }
 
     def _load_from_disk(self):
@@ -94,42 +91,32 @@ class DataManager:
             try:
                 with open(BACKUP_FILE, 'r') as f:
                     data = json.load(f)
-                    for k, v in data.items():
-                        self.local_cache[k] = v
-            except:
-                pass
+                    for k, v in data.items(): self.local_cache[k] = v
+            except: pass
 
     def _async_save(self):
         def save():
             with self.lock:
-                try:
-                    with open(BACKUP_FILE, 'w') as f:
-                        json.dump(self.local_cache, f)
-                except:
-                    pass
+                try: with open(BACKUP_FILE, 'w') as f: json.dump(self.local_cache, f)
+                except: pass
         threading.Thread(target=save).start()
 
     def get_user(self, uid):
         if self.r:
             try:
                 data = self.r.get(f"user:{uid}")
-                if data:
-                    return json.loads(data)
-            except:
-                pass
+                if data: return json.loads(data)
+            except: pass
         return self.local_cache[uid]
 
     def save_user(self, uid, data):
         if len(data['history']) > MAX_HISTORY_LEN:
             data['history'] = data['history'][-MAX_HISTORY_LEN:]
         if self.r:
-            try:
-                self.r.set(f"user:{uid}", json.dumps(data), ex=604800)
-            except:
-                pass
+            try: self.r.set(f"user:{uid}", json.dumps(data), ex=604800)
+            except: pass
         self.local_cache[uid] = data
-        if not self.r:
-            self._async_save()
+        if not self.r: self._async_save()
 
     def reset_user(self, uid):
         self.local_cache[uid] = self._default_schema()
@@ -177,14 +164,14 @@ def get_system_prompt(profile):
     """
 
 # ==========================================
-# 🎨 UI
+# 🎨 UI (MOBILE POLISHED)
 # ==========================================
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Coach</title>
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/dumbbell.png">
@@ -192,12 +179,25 @@ HTML_PAGE = """
     <meta name="theme-color" content="#0f172a">
     <style>
         :root { --bg: #0f172a; --chat-bg: #1e293b; --user-msg: #2563eb; --bot-msg: #334155; --text: #f8fafc; --accent: #3b82f6; }
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; margin: 0; overflow: hidden; }
+        
+        /* 🔥 FIX: Fixed position prevents background scroll issues on iOS */
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+            background: var(--bg); color: var(--text); 
+            height: 100dvh; /* Dynamic Height */
+            width: 100%;
+            position: fixed; 
+            top: 0; left: 0;
+            display: flex; flex-direction: column; 
+            margin: 0; overflow: hidden; 
+        }
+
         .header { background: var(--bg); padding: 15px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; padding-top: max(15px, env(safe-area-inset-top)); }
         .title { font-weight: 800; font-size: 14px; letter-spacing: 2px; color: #94a3b8; }
         .badge { background: #334155; padding: 5px 10px; border-radius: 6px; font-size: 10px; font-weight: 600; cursor: pointer; border: 1px solid #475569; }
         .badge.premium { background: var(--accent); color: white; border: none; }
-        #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; padding-bottom: 40px; }
+        
+        #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; padding-bottom: 20px; -webkit-overflow-scrolling: touch; }
         
         .message { max-width: 85%; padding: 12px 16px; border-radius: 18px; font-size: 16px; line-height: 1.4; animation: fadeIn 0.2s forwards; }
         .bot { align-self: flex-start; background: var(--bot-msg); border-bottom-left-radius: 4px; color: #e2e8f0; }
@@ -227,9 +227,11 @@ HTML_PAGE = """
     </div>
     <div id="chat-box"></div>
     <div class="input-area">
-        <input type="file" id="fileInp" accept="image/*" style="display:none" onchange="handleFile(this)">
+        <input type="file" id="fileInp" accept="image/*" style="display:none" tabindex="-1" aria-hidden="true" onchange="handleFile(this)">
         <button class="btn-icon" onclick="document.getElementById('fileInp').click()">📷</button>
-        <input type="text" id="inp" placeholder="Message..." autocomplete="off" onkeypress="if(event.key==='Enter') send()">
+        
+        <input type="text" id="inp" placeholder="Message..." autocomplete="off" enterkeyhint="send" onkeypress="if(event.key==='Enter') send()">
+        
         <button id="sendBtn" class="btn-icon btn-send" onclick="send()">↑</button>
     </div>
     
@@ -401,8 +403,7 @@ def chat():
     sys_prompt = get_system_prompt(user['profile'])
     
     messages = [{"role": "system", "content": sys_prompt}]
-    clean_history = [m for m in user['history'] if m.get('content') != "SYSTEM_INIT_TRIGGER"][-10:]
-    messages.extend(clean_history)
+    messages.extend([m for m in user['history'] if m.get('content') != "SYSTEM_INIT_TRIGGER"][-12:])
     messages.append({"role": "user", "content": msg})
     
     time.sleep(random.uniform(0.5, 2.5)) # 🧠 THINKING PAUSE
