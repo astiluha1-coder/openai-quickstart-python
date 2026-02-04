@@ -230,7 +230,7 @@ def get_system_prompt(profile, last_msg=""):
     """
 
 # ==========================================
-# 🎨 UI (CONCRETE LAYOUT)
+# 🎨 UI (VERSION 66 - GHOST BUSTER)
 # ==========================================
 HTML_PAGE = """
 <!DOCTYPE html>
@@ -247,40 +247,25 @@ HTML_PAGE = """
         :root { --bg: #ffffff; --chat-bg: #f7f7f8; --border: #e5e7eb; --user-msg: #2563eb; --bot-msg: #f3f4f6; --text-main: #111827; --text-muted: #6b7280; --accent: #2563eb; }
         * { box-sizing: border-box; }
         
-        /* 🔥 CONCRETE BODY LOCK */
-        html { height: 100dvh; overflow: hidden; }
+        /* 🔥 FIXED VIEWPORT FIX */
+        html { height: 100%; overflow: hidden; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
             background: var(--bg); color: var(--text-main); 
-            height: 100dvh; 
-            width: 100%;
-            margin: 0;
-            position: relative; /* Fixed elements anchor to this */
-            overflow: hidden;
+            height: 100dvh; width: 100%; 
+            margin: 0; position: relative; overflow: hidden; 
         }
 
-        /* 🔥 FIXED HEADER */
-        .header { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 52px; 
-            border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; 
-            padding: 0 16px; padding-top: max(10px, env(safe-area-inset-top)); 
-            background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); 
-            z-index: 100;
-        }
+        .header { position: fixed; top: 0; left: 0; width: 100%; height: 52px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; padding-top: max(10px, env(safe-area-inset-top)); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 100; }
         .title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-muted); }
         .badge { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; color: var(--text-muted); }
         .badge.premium { background: var(--accent); color: white; border: none; }
         
-        /* 🔥 SCROLLABLE CHAT AREA (Pinned between header and input) */
+        /* 🔥 CHAT AREA PINNED */
         #chat-box { 
-            position: fixed; 
-            top: 52px; 
-            bottom: 70px; /* Space for input */
-            left: 0; width: 100%;
-            overflow-y: auto; 
-            padding: 24px 16px; 
-            display: flex; flex-direction: column; gap: 20px; 
-            -webkit-overflow-scrolling: touch;
+            position: fixed; top: 52px; bottom: 70px; left: 0; width: 100%;
+            overflow-y: auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; 
+            -webkit-overflow-scrolling: touch; background: var(--bg);
         }
         
         .message { max-width: 85%; padding: 14px 16px; border-radius: 12px; font-size: 15px; line-height: 1.5; animation: fadeIn 0.2s forwards; }
@@ -289,7 +274,7 @@ HTML_PAGE = """
         .message img { max-width: 100%; border-radius: 10px; margin-top: 8px; }
         .sys-event { align-self: center; text-align: center; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0; }
         
-        /* 🔥 FIXED INPUT AREA */
+        /* 🔥 INPUT AREA PINNED */
         .input-area { 
             position: fixed; bottom: 0; left: 0; width: 100%;
             border-top: 1px solid var(--border); padding: 12px; 
@@ -299,10 +284,9 @@ HTML_PAGE = """
         }
         
         input[type="text"] { 
-            flex: 1; padding: 12px 14px; 
-            font-size: 16px; 
-            border-radius: 10px; border: 1px solid var(--border); 
-            outline: none; background: var(--chat-bg); color: var(--text-main); 
+            flex: 1; padding: 12px 14px; font-size: 16px; 
+            border-radius: 10px; border: 1px solid var(--border); outline: none; 
+            background: var(--chat-bg); color: var(--text-main); 
         }
         input[type="text"]:focus { border-color: var(--border); background: #fff; }
         
@@ -318,7 +302,7 @@ HTML_PAGE = """
 </head>
 <body>
     <div class="header">
-        <div class="title">COACH V1</div>
+        <div class="title">COACH V66</div>
         <div id="badge" class="badge" onclick="openModal()">ACCESS</div>
     </div>
     
@@ -338,7 +322,7 @@ HTML_PAGE = """
     <div id="modal">
         <div class="modal-content">
             <h3 style="color:#111827; margin:0; font-size:16px;">MEMBER ACCESS</h3>
-            <input type="text" id="key-val" placeholder="ENTER KEY" autocomplete="off" disabled>
+            <input type="hidden" id="key-val" placeholder="ENTER KEY">
             <button class="btn-icon btn-send" style="width:100%; height:auto; padding:12px; font-size:14px; font-weight:600;" onclick="verifyAndSave()">UNLOCK</button>
             <p onclick="closeModal()" style="margin-top:20px; color:#6b7280; font-size:12px; cursor:pointer;">Close</p>
         </div>
@@ -354,13 +338,15 @@ HTML_PAGE = """
 
         function openModal() { 
             document.getElementById('modal').style.display='flex';
-            keyInp.disabled = false;
+            // 🔥 Switch to text ONLY when visible
+            keyInp.type = 'text';
             keyInp.focus();
         }
         
         function closeModal() {
             document.getElementById('modal').style.display='none';
-            keyInp.disabled = true;
+            // 🔥 Switch back to hidden to kill arrows
+            keyInp.type = 'hidden';
             keyInp.blur();
         }
         
