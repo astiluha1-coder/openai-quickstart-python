@@ -32,3 +32,7 @@ flask
 openai
 gunicorn
 flask-cors
+flask
+openai==0.28.0
+gunicorn
+flask-cors
