@@ -1,60 +1,90 @@
-const chatWindow = document.querySelector('.chat-window');
+const app = document.getElementById('app');
+const chatBubble = document.getElementById('chatBubble');
+const closeBtn = document.getElementById('closeBtn');
+const chatWindow = document.getElementById('chatWindow');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
-const app = document.getElementById('app');
-const closeBtn = document.getElementById('closeBtn');
-const chatBubble = document.getElementById('chatBubble');
 
 let uid = localStorage.getItem("uid") || ("u" + Date.now());
 localStorage.setItem("uid", uid);
 
-// --- ЛОГИКА ОТКРЫТИЯ/ЗАКРЫТИЯ ---
+// Флаг защиты от двойной отправки
+let isSending = false;
+
+// === 1. ОТКРЫТИЕ / ЗАКРЫТИЕ ===
 chatBubble.addEventListener('click', () => {
-    app.classList.remove('hidden');     // Показать чат
-    chatBubble.classList.add('hidden'); // Скрыть кнопку
+    chatBubble.classList.add('hidden');
+    requestAnimationFrame(() => app.classList.add('active'));
+    setTimeout(() => userInput.focus(), 100);
 });
 
 closeBtn.addEventListener('click', () => {
-    app.classList.add('hidden');        // Скрыть чат
-    chatBubble.classList.remove('hidden'); // Вернуть кнопку
+    app.classList.remove('active');
+    setTimeout(() => {
+        chatBubble.classList.remove('hidden');
+    }, 300);
 });
 
-// --- ОТПРАВКА СООБЩЕНИЙ ---
-sendBtn.addEventListener('click', sendUserMessage);
-userInput.addEventListener('keypress', (e) => { if(e.key==='Enter') sendUserMessage(); });
+// === 2. ВВОД ===
+userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
 
-async function sendUserMessage() {
-    const text = userInput.value.trim(); 
-    if(!text) return;
+sendBtn.addEventListener('click', sendMessage);
+
+// === 3. ЛОГИКА СООБЩЕНИЙ ===
+async function sendMessage() {
+    const text = userInput.value.trim();
+    // Блокируем, если пусто или уже идет отправка
+    if (!text || isSending) return;
+
+    isSending = true; // Блокируем ввод
     
-    addUserMessage(text); 
-    userInput.value='';
+    addMessage(text, 'usr');
+    userInput.value = '';
+    scrollToBottom();
 
     try {
-        const res = await fetch('/chat', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ msg:text, uid:uid, k:'ACCESS_KEY' })
+        const response = await fetch('/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ msg: text, uid: uid, k: 'ACCESS_KEY' })
         });
-        const data = await res.json();
-        addBotMessage(data.reply);
+        const data = await response.json();
+        
+        // Органическая задержка
+        const delay = Math.max(600, (data.reply.length * 20));
+
+        setTimeout(() => {
+            addMessage(data.reply, 'bot');
+            isSending = false; // Разблокируем после ответа
+        }, delay);
+
     } catch (e) {
-        addBotMessage("AI Offline");
+        setTimeout(() => {
+            addMessage("Connection error. Try again.", 'bot');
+            isSending = false; // Разблокируем при ошибке
+        }, 600);
     }
 }
 
-function addBotMessage(text) {
-    const msg = document.createElement('div');
-    msg.classList.add('bot');
-    msg.textContent = text;
-    chatWindow.appendChild(msg); // ИСПРАВЛЕНО (было пусто)
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+function addMessage(text, type) {
+    const div = document.createElement('div');
+    div.classList.add('msg', type);
+    div.textContent = text;
+    chatWindow.appendChild(div);
+    scrollToBottom();
 }
 
-function addUserMessage(text) {
-    const msg = document.createElement('div');
-    msg.classList.add('usr');
-    msg.textContent = text;
-    chatWindow.appendChild(msg);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+function scrollToBottom() {
+    // requestAnimationFrame гарантирует, что скролл сработает после рендера DOM
+    requestAnimationFrame(() => {
+        chatWindow.scrollTo({
+            top: chatWindow.scrollHeight,
+            behavior: 'smooth'
+        });
+    });
 }
