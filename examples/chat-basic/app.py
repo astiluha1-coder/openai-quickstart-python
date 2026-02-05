@@ -6,11 +6,13 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
+# Инициализация клиента
 client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY")
 )
 
-MODEL = "gpt-5-mini"
+# Используем gpt-4o-mini (самая свежая и быстрая модель на сегодня)
+MODEL = "gpt-4o-mini"
 
 SYSTEM_PROMPT = (
     "Ты профессиональный персональный фитнес-тренер. "
@@ -20,7 +22,7 @@ SYSTEM_PROMPT = (
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Coach Server Running 🚀"
+    return "Coach Server Running! 🚀"
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -31,26 +33,23 @@ def chat():
         if not user_message:
             return jsonify({"reply": "Сообщение пустое"}), 400
 
-        response = client.responses.create(
+        # === ПРАВИЛЬНАЯ КОМАНДА OPENAI ===
+        response = client.chat.completions.create(
             model=MODEL,
-            input=[
-                {
-                    "role": "system",
-                    "content": SYSTEM_PROMPT
-                },
-                {
-                    "role": "user",
-                    "content": user_message
-                }
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message}
             ],
-            max_output_tokens=300
+            max_tokens=300,
+            temperature=0.7
         )
 
-        reply = response.output_text
+        # Правильный способ достать текст
+        reply = response.choices[0].message.content
         return jsonify({"reply": reply})
 
     except Exception as e:
-        print("SERVER ERROR:", e)
+        print(f"SERVER ERROR: {e}")
         return jsonify({
             "reply": f"Ошибка сервера: {str(e)}"
         }), 500
