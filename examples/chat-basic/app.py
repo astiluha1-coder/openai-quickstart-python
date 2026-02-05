@@ -36,7 +36,7 @@ def chat():
 
         # Отправляем запрос в OpenAI
         response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo", # Или gpt-4o, если у тебя есть доступ
+            model="gpt-5-mini", # Или gpt-5-mini, если у тебя есть доступ
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
