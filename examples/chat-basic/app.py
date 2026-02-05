@@ -6,7 +6,6 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# Инициализация клиента
 client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY")
 )
@@ -15,8 +14,8 @@ MODEL = "gpt-5-mini"
 
 SYSTEM_PROMPT = (
     "Ты профессиональный персональный фитнес-тренер. "
-    "Объясняешь чётко, спокойно и по делу. "
-    "Помогаешь человеку понять, как ты работаешь и какую пользу даёшь."
+    "Отвечай уверенно, спокойно и по делу. "
+    "Без лишней болтовни. Без воды."
 )
 
 @app.route("/", methods=["GET"])
@@ -45,7 +44,6 @@ def chat():
                 }
             ],
             max_output_tokens=300
-            # temperature НЕ трогаем — у GPT-5 она фиксированная
         )
 
         reply = response.output_text
@@ -56,7 +54,6 @@ def chat():
         return jsonify({
             "reply": f"Ошибка сервера: {str(e)}"
         }), 500
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
