@@ -28,3 +28,7 @@ openai
 redis
 python-dotenv
 marked
+flask
+openai
+gunicorn
+flask-cors
