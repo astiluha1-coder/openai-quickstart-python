@@ -1,60 +1,61 @@
-import os
+Import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from openai import OpenAI  # <--- Новый импорт для версий 1.0+
+from openai import OpenAI
 
 app = Flask(__name__)
 CORS(app)
 
-# Инициализация клиента (новый синтаксис)
+# Инициализация клиента OpenAI
 client = OpenAI(
-    api_key=os.environ.get("OPENAI_API_KEY"),
+    api_key=os.environ.get("OPENAI_API_KEY")
 )
 
-# --- НАСТРОЙКИ ---
-# Если у тебя есть доступ к gpt-5-mini, поменяй название внутри кавычек:
-CURRENT_MODEL = "gpt-5-mini" 
+MODEL = "gpt-5-mini"
 
-@app.route("/", methods=["GET"])
-def index():
-    return "Personal Coach Server is Running! 🚀"
+SYSTEM_PROMPT = (
+    "Ты персональный фитнес-тренер премиум-класса. "
+    "Отвечай уверенно, спокойно и по делу. "
+    "Без воды. Без лишних эмодзи. "
+    "Твоя цель — помочь человеку тренироваться безопасно и эффективно."
+)
 
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        data = request.json
-        user_message = data.get("msg")
-        
+        data = request.get_json()
+        user_message = data.get("msg", "").strip()
+
         if not user_message:
-            return jsonify({"reply": "Error: Empty message"}), 400
+            return jsonify({"reply": "Сообщение пустое"}), 400
 
-        # СИСТЕМНЫЙ ПРОМПТ
-        system_prompt = (
-            "Ты — профессиональный фитнес-коуч. "
-            "Твоя задача — мотивировать, составлять планы тренировок и давать советы по питанию. "
-            "Отвечай кратко (до 50 слов), энергично и используй эмодзи. "
-            "Веди себя как наставник."
-        )
-
-        # НОВЫЙ СИНТАКСИС ЗАПРОСА (v1.0+)
-        response = client.chat.completions.create(
-            model=CURRENT_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
+        response = client.responses.create(
+            model=MODEL,
+            input=[
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT
+                },
+                {
+                    "role": "user",
+                    "content": user_message
+                }
             ],
-            temperature=0.7,
-            max_tokens=500
+            max_output_tokens=300
         )
 
-        # Получаем ответ (новый синтаксис через точку, а не скобки)
-        bot_reply = response.choices[0].message.content
-        return jsonify({"reply": bot_reply})
+        # Универсальный и безопасный способ получить текст
+        reply = response.output_text
+
+        return jsonify({"reply": reply})
 
     except Exception as e:
-        print(f"Server Error: {e}")
-        return jsonify({"reply": "Произошла ошибка на сервере. Проверь логи Railway."}), 500
+        print("SERVER ERROR:", e)
+        return jsonify({
+            "reply": "Ошибка сервера. Попробуй ещё раз."
+        }), 500
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host="0.0.0.0", port=port)
