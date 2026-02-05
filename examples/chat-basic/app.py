@@ -1,3 +1,8 @@
+# Добавь в начало файла:
+from flask_cors import CORS
+
+# После app = Flask(__name__):
+CORS(app)
 import os, time, json, random, threading, hmac
 from flask import Flask, request, jsonify, render_template
 from collections import defaultdict
