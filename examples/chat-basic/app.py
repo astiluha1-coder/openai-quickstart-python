@@ -1,13 +1,19 @@
 import os
-import openai
-from flask import Flask, redirect, render_template, request, url_for, jsonify
-from flask_cors import CORS  # <--- ЭТО ВАЖНО ДЛЯ РАБОТЫ С SHOPIFY
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from openai import OpenAI  # <--- Новый импорт для версий 1.0+
 
 app = Flask(__name__)
-# Разрешаем запросы с любых сайтов (чтобы Shopify не ругался)
 CORS(app)
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Инициализация клиента (новый синтаксис)
+client = OpenAI(
+    api_key=os.environ.get("OPENAI_API_KEY"),
+)
+
+# --- НАСТРОЙКИ ---
+# Если у тебя есть доступ к gpt-5-mini, поменяй название внутри кавычек:
+CURRENT_MODEL = "gpt-5-mini" 
 
 @app.route("/", methods=["GET"])
 def index():
@@ -16,40 +22,38 @@ def index():
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        # Получаем данные от Shopify
         data = request.json
         user_message = data.get("msg")
         
-        # Если сообщения нет, возвращаем ошибку
         if not user_message:
             return jsonify({"reply": "Error: Empty message"}), 400
 
-        # НАСТРОЙКА МОЗГА (СИСТЕМНЫЙ ПРОМПТ)
-        # Здесь ты задаешь характер тренера
+        # СИСТЕМНЫЙ ПРОМПТ
         system_prompt = (
-            "Ты — опытный, энергичный и поддерживающий фитнес-тренер. "
-            "Твоя цель — помогать пользователю с тренировками, питанием и мотивацией. "
-            "Отвечай кратко (не более 3-4 предложений), четко и с энтузиазмом. "
-            "Используй эмодзи, чтобы ответы выглядели живыми. "
-            "Если спрашивают не про фитнес, вежливо верни тему к тренировкам."
+            "Ты — профессиональный фитнес-коуч. "
+            "Твоя задача — мотивировать, составлять планы тренировок и давать советы по питанию. "
+            "Отвечай кратко (до 50 слов), энергично и используй эмодзи. "
+            "Веди себя как наставник."
         )
 
-        # Отправляем запрос в OpenAI
-        response = openai.ChatCompletion.create(
-            model="gpt-5-mini", # Или gpt-5-mini, если у тебя есть доступ
+        # НОВЫЙ СИНТАКСИС ЗАПРОСА (v1.0+)
+        response = client.chat.completions.create(
+            model=CURRENT_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
             temperature=0.7,
+            max_tokens=500
         )
 
+        # Получаем ответ (новый синтаксис через точку, а не скобки)
         bot_reply = response.choices[0].message.content
         return jsonify({"reply": bot_reply})
 
     except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({"reply": "Извини, я сейчас немного устал. Попробуй еще раз через минуту!"}), 500
+        print(f"Server Error: {e}")
+        return jsonify({"reply": "Произошла ошибка на сервере. Проверь логи Railway."}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
