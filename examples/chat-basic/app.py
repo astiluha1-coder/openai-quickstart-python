@@ -6,29 +6,37 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# Инициализация клиента OpenAI
+# OpenAI client
 client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY")
 )
 
+# === МОДЕЛЬ ===
 MODEL = "gpt-5-mini"
 
+# === СИСТЕМНЫЙ ПРОМПТ (фиксированный, без креативного разброса) ===
 SYSTEM_PROMPT = (
-    "Ты персональный фитнес-тренер премиум-класса. "
-    "Отвечай уверенно, спокойно и по делу. "
-    "Без воды. Без лишних эмодзи. "
-    "Твоя цель — помочь человеку тренироваться безопасно и эффективно."
+    "Ты профессиональный персональный фитнес-тренер. "
+    "Отвечай четко, спокойно и уверенно. "
+    "Давай практичные советы по тренировкам и восстановлению. "
+    "Без воды, без лишних эмоций. "
+    "Форматируй ответы краткими абзацами."
 )
+
+@app.route("/", methods=["GET"])
+def index():
+    return "Coach Server (GPT-5-mini) is running 🚀"
 
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        data = request.get_json()
+        data = request.json
         user_message = data.get("msg", "").strip()
 
         if not user_message:
             return jsonify({"reply": "Сообщение пустое"}), 400
 
+        # === GPT-5-mini через Responses API ===
         response = client.responses.create(
             model=MODEL,
             input=[
@@ -41,18 +49,26 @@ def chat():
                     "content": user_message
                 }
             ],
-            max_output_tokens=300
+            max_output_tokens=400  # фиксируем длину, без хаоса
         )
 
-        # Универсальный и безопасный способ получить текст
-        reply = response.output_text
+        # === ДОСТАЕМ ТЕКСТ БЕЗОПАСНО ===
+        reply = ""
+        for item in response.output:
+            if item["type"] == "message":
+                for part in item["content"]:
+                    if part["type"] == "output_text":
+                        reply += part["text"]
+
+        if not reply:
+            reply = "Попробуй переформулировать вопрос."
 
         return jsonify({"reply": reply})
 
     except Exception as e:
         print("SERVER ERROR:", e)
         return jsonify({
-            "reply": "Ошибка сервера. Попробуй ещё раз."
+            "reply": f"Ошибка сервера: {str(e)}"
         }), 500
 
 
