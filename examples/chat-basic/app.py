@@ -6,26 +6,22 @@ from openai import OpenAI
 app = Flask(__name__)
 CORS(app)
 
-# OpenAI client
+# Инициализация клиента
 client = OpenAI(
     api_key=os.environ.get("OPENAI_API_KEY")
 )
 
-# === МОДЕЛЬ ===
 MODEL = "gpt-5-mini"
 
-# === СИСТЕМНЫЙ ПРОМПТ (фиксированный, без креативного разброса) ===
 SYSTEM_PROMPT = (
     "Ты профессиональный персональный фитнес-тренер. "
-    "Отвечай четко, спокойно и уверенно. "
-    "Давай практичные советы по тренировкам и восстановлению. "
-    "Без воды, без лишних эмоций. "
-    "Форматируй ответы краткими абзацами."
+    "Объясняешь чётко, спокойно и по делу. "
+    "Помогаешь человеку понять, как ты работаешь и какую пользу даёшь."
 )
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Coach Server (GPT-5-mini) is running 🚀"
+    return "Coach Server Running 🚀"
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -36,7 +32,6 @@ def chat():
         if not user_message:
             return jsonify({"reply": "Сообщение пустое"}), 400
 
-        # === GPT-5-mini через Responses API ===
         response = client.responses.create(
             model=MODEL,
             input=[
@@ -49,20 +44,11 @@ def chat():
                     "content": user_message
                 }
             ],
-            max_output_tokens=400  # фиксируем длину, без хаоса
+            max_output_tokens=300
+            # temperature НЕ трогаем — у GPT-5 она фиксированная
         )
 
-        # === ДОСТАЕМ ТЕКСТ БЕЗОПАСНО ===
-        reply = ""
-        for item in response.output:
-            if item["type"] == "message":
-                for part in item["content"]:
-                    if part["type"] == "output_text":
-                        reply += part["text"]
-
-        if not reply:
-            reply = "Попробуй переформулировать вопрос."
-
+        reply = response.output_text
         return jsonify({"reply": reply})
 
     except Exception as e:
